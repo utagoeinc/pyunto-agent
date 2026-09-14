@@ -1,0 +1,43 @@
+[project]
+name = "pyunto-agent"
+version = "0.1.0"
+description = "Make an external agent (Claude, Claude Code, any CLI/HTTP agent) the partner of a Pyunto exchange diary"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+readme = "README.md"
+authors = [{ name = "Utagoe Inc." }]
+keywords = ["pyunto", "diary", "agent", "e2ee", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Chat",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "requests>=2.31",
+    "python-socketio[client]>=5.16",
+    "cryptography>=42.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# Terminal QR for agent-initiated pairing. Optional: a headless agent in CI never shows one,
+# and a hard requirement would make every install pay for a path most runs do not take.
+qr = ["qrcode>=7.4"]
+
+[project.urls]
+Homepage = "https://github.com/utagoeinc/pyunto-agent"
+Repository = "https://github.com/utagoeinc/pyunto-agent"
+
+[project.scripts]
+pyunto-agent = "pyunto_agent.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pyunto_agent*"]

@@ -1,0 +1,11 @@
+.venv/
+.agent-data/
+.pytest_cache/
+*.egg-info/
+__pycache__/
+.env
+.git/
+tests/
+*.md
+!README.md
+!persona.md
