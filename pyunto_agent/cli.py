@@ -114,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
     p_pair.add_argument("--runtime", default="self_hosted",
                         choices=["self_hosted", "hosted", "endpoint"],
                         help="where the diary would be decrypted (default: this machine)")
+    p_pair.add_argument("--big", action="store_true",
+                        help="draw the square larger; use it when a phone will not scan")
     p_serve = sub.add_parser("serve", help="hosted mode: HTTP control API + bridge for all joined spaces")
     p_serve.add_argument("--listen", default=os.environ.get("PYUNTO_AGENT_LISTEN", "127.0.0.1:8788"))
     p_serve.add_argument("--backend", default=os.environ.get("PYUNTO_BACKEND", "claude-api"),
@@ -181,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
             runtime=args.runtime,
         )
         text = encode_payload(payload)
-        qr = render_qr(text)
+        qr = render_qr(text, big=args.big)
         print()
         if qr:
             print(qr)

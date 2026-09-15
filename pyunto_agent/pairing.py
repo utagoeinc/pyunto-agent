@@ -57,21 +57,33 @@ def encode_payload(payload: dict[str, Any]) -> str:
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
 
-def render_qr(text: str) -> str | None:
+def render_qr(text: str, big: bool = False) -> str | None:
     """The QR as terminal text, or None if no renderer is installed.
 
     `qrcode` is an optional dependency: an agent running headless in CI has no use for it, and
     a hard requirement would make every install pay for a feature most runs never reach.
+
+    This payload is ~210 characters, which is a version-10 symbol: 59x59 modules, four times
+    the data of an invite link. Half-block packing keeps that square small enough to fit a
+    terminal, but each module ends up half a character tall, and phones struggle to resolve
+    it. `big` draws one module per two spaces instead -- roughly four times the area, needing
+    a wide window, and worth it when a scan will not catch.
     """
     try:
         import qrcode  # noqa: PLC0415 - optional, imported where it is used
     except ImportError:
         return None
 
-    qr = qrcode.QRCode(border=1)
+    qr = qrcode.QRCode(border=2 if big else 1)
     qr.add_data(text)
     qr.make(fit=True)
     matrix = qr.get_matrix()
+
+    if big:
+        # Two spaces per module so the square is not squashed by the cell aspect ratio.
+        return "\n".join(
+            "".join("  " if not cell else "██" for cell in row) for row in matrix
+        )
 
     # Two rows per line with half-block characters, so the square is not stretched to twice
     # its height by the terminal's cell aspect ratio -- a stretched QR scans poorly.
