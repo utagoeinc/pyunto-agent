@@ -63,6 +63,14 @@ class IncomingMessage:
     notify_uuids: list[str] | None = None
     #: True when the sender chose "leave it quietly" (no push to anyone).
     silent: bool = False
+    #: True when the sender is a non-human member (``users.is_agent``).
+    #:
+    #: This is the server's own flag, not the 🤖 display-name marker: the server sets it on
+    #: join and an account cannot clear it by renaming (spaceLockdownService.flagAgentOnJoin).
+    #: It is therefore the only trustworthy answer to "did a program write this", which is
+    #: what a robot must know before it moves anything. Absent on very old servers -> False,
+    #: so callers that need the guarantee should fail closed themselves.
+    sender_is_agent: bool = False
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     def __str__(self) -> str:
@@ -340,6 +348,7 @@ class PyuntoClient:
             chat_space_id=space_id,
             sender_uuid=str(sender.get("uuid", "")).lower(),
             sender_name=sender.get("display_name", "?"),
+            sender_is_agent=bool(sender.get("is_agent")),
             raw=m,
         )
 
@@ -363,6 +372,7 @@ class PyuntoClient:
             chat_space_id=space_id,
             sender_uuid=str(sender.get("uuid", "")).lower(),
             sender_name=sender.get("display_name", "?"),
+            sender_is_agent=bool(sender.get("is_agent")),
             mentioned_uuids=[str(u).lower() for u in (data.get("mentionedUsers") or [])],
             notify_uuids=[str(u).lower() for u in notify] if isinstance(notify, list) else None,
             silent=bool(data.get("silent")),

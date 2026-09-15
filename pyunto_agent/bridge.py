@@ -35,9 +35,21 @@ class Bridge:
         max_replies_per_hour: int = 60,
         silent: bool = False,
         on_idle: Callable[[], None] | None = None,
+        acts_physically: bool | None = None,
     ):
         self.client = client
         self.backend = backend
+        # True when replying means MOVING something in the world (the robot SDK), rather
+        # than writing a sentence. It tightens who may give instructions -- see
+        # _should_reply. A text agent answering the wrong entry is noise; a robot acting on
+        # the wrong entry opens a door nobody asked to have opened, so the two cannot share
+        # one threshold.
+        #
+        # Defaults to what the backend declares, so a robot is protected even when the code
+        # constructing the Bridge predates this flag. An explicit argument still wins, but
+        # only to turn it ON: nothing may quietly disable the gate for a backend that moves.
+        declared = bool(getattr(backend, "acts_physically", False))
+        self.acts_physically = declared or bool(acts_physically)
         self.persona = persona
         self.space_ids = {s.lower() for s in space_ids} if space_ids else None
         self.history = history
@@ -95,6 +107,10 @@ class Bridge:
     def _should_reply(self, m: IncomingMessage) -> bool:
         """Whether this entry is addressed to the agent.
 
+        A backend that acts in the world (``acts_physically``) is governed by the two
+        refusals at the top of this method instead of the rules below: it never takes
+        instructions from another program, and it acts only when addressed by name.
+
         In a one-on-one diary -- one person and the agent, i.e. two members in total --
         everything written is addressed to the agent by definition, so it answers freely.
 
@@ -111,6 +127,38 @@ class Bridge:
         ``notify_uuids`` (server field ``notify_users``) is the one that says who the
         entry was actually for.
         """
+        # -- rules that apply to a backend which acts in the world ----------------------
+        #
+        # Both are refusals, checked before anything else, because the cost of being wrong
+        # here is physical rather than conversational.
+        if self.acts_physically:
+            # 1) Never take instructions from another program.
+            #
+            # An agent in the same space posts prose -- a check-in, a summary, a reply that
+            # quotes what the robot itself narrated ("Understood: open the door") -- and
+            # nothing in that text distinguishes it from a person asking. Without this, two
+            # non-humans in one diary form a loop with no one in it.
+            #
+            # `sender_is_agent` comes from the server's `users.is_agent`, set on join and
+            # not clearable by renaming, so a program cannot present itself as a person to
+            # get past this (spaceLockdownService.flagAgentOnJoin).
+            if m.sender_is_agent:
+                log.info("ignoring entry from %s: a robot takes orders only from people",
+                         m.sender_name)
+                return False
+            # 2) Always require being addressed by name.
+            #
+            # "Sent to everyone" is enough for a text agent -- answering an entry meant for
+            # the room is harmless. For a robot it is not: a person thinking aloud in a
+            # shared diary would set it walking. Acting needs someone to have chosen it.
+            if not self._is_mentioned_by_name(m.text) and not (
+                m.notify_uuids is not None and self.client.uuid in m.notify_uuids
+            ):
+                log.info("ignoring entry from %s: a robot acts only when addressed by name",
+                         m.sender_name)
+                return False
+            return True
+
         if self._member_count(m.chat_space_id) <= 2:
             return True
 

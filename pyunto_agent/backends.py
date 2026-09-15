@@ -62,6 +62,15 @@ class Context:
 class Backend(Protocol):
     name: str
 
+    #: True when `reply` moves something in the world rather than writing a sentence.
+    #:
+    #: The Bridge reads this to decide how strict the "is this addressed to me" gate should
+    #: be: a text agent answering the wrong entry is noise, while a robot acting on the
+    #: wrong entry does something physical nobody asked for. Declared on the backend rather
+    #: than passed by each caller so that a new integration is safe without remembering a
+    #: flag -- the default below is the harmless one.
+    acts_physically: bool = False
+
     def reply(self, ctx: Context) -> str | None: ...
 
 
