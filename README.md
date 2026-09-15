@@ -11,39 +11,48 @@ Two ways to use it, same process:
 * **Pull (MCP)** — `pyunto-agent mcp` exposes the diary as MCP tools for Claude Code / Claude
   Desktop / any MCP client.
 
-## Setup
+## Quick start
+
+Four commands, and the agent is answering your diary.
 
 ```bash
 git clone https://github.com/utagoeinc/pyunto-agent
 cd pyunto-agent
-python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-cp .env.example .env      # fill in ANTHROPIC_API_KEY (and optionally an account)
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev,qr]'
+cp .env.example .env                       # put your ANTHROPIC_API_KEY in it
+
+.venv/bin/pyunto-agent pair --operator "your name"
 ```
 
-Add `'.[qr]'` if you want `pyunto-agent pair` to draw a scannable square in the terminal.
+A square appears in the terminal. Scan it with the Pyunto app, choose which diary to let the
+agent into, and approve — **the agent then starts answering by itself.** No second command.
 
-Without `PYUNTO_EMAIL`, the agent uses an anonymous account named `PYUNTO_AGENT_NAME`
-(default "Claude"); the device id and identity key are kept in `~/.pyunto-agent/`.
-
-## Pair with a diary
-
-Either direction works; pick whichever end you are standing at.
-
-**From the terminal** (you are already running the agent):
-
-```bash
-pyunto-agent pair --operator "your name or company"
+```
+waiting for the scan… (Ctrl-C to stop)
+paired — joined a space. Answering entries now.
 ```
 
-It prints a code. Scan it in the Pyunto app, choose the diary, and confirm. The code holds no
-secret — it names the account asking, and the decision stays with whoever holds the phone.
+Write an entry in that diary and the agent replies in the same thread.
 
-**From the app** (someone else set the agent up for you):
+Open the space once in the app after approving. The diary is end-to-end encrypted, so a member
+hands the agent a key; the server cannot.
+
+### Details
+
+Add `--no-run` to draw the square and exit, if you would rather start it yourself later with
+`pyunto-agent run`. The square holds no secret: it names the account asking, and the decision
+stays with whoever holds the phone.
+
+Without `PYUNTO_EMAIL` the agent uses an anonymous account named `PYUNTO_AGENT_NAME` (default
+"Claude"); the device id and identity key live in `~/.pyunto-agent/`.
+
+### Pairing from the app instead
+
+If someone else set the agent up for you, go the other way:
 
 1. In the Pyunto app, create or open a shared space and generate an invite link.
 2. `pyunto-agent join 'pyunto://invite/…'`
-3. Open the space once in the app. The app sees the new member and shares the space key with
-   the agent's identity key (this is the E2EE key distribution the apps already do).
+3. Open the space once in the app, so the space key is shared with the agent's identity key.
 4. `pyunto-agent whoami` should now show `key=yes` for that space.
 
 ## Push: Claude API replies

@@ -103,3 +103,37 @@ def render_qr(text: str, big: bool = False) -> str | None:
                 row += " "
         lines.append(row)
     return "\n".join(lines)
+
+
+def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: ANN001
+    """Block until somebody scans the square and lets this account into a space.
+
+    Printing a QR code and exiting makes the person run a second command, and -- worse --
+    gives them no way to tell whether the scan worked. The square just sits there. So the
+    code that drew it waits for the answer, and the caller carries straight on into
+    listening: scan, approve, and the agent is live.
+
+    Returns the space id that appeared, or None if nobody scanned in time. Polls rather than
+    subscribes because membership is granted server-side and there is no event for it; the
+    interval is slow enough to be invisible in a log and fast enough to feel immediate.
+    """
+    import time
+
+    def shared_spaces() -> set[str]:
+        try:
+            return {
+                str(s.get("uuid"))
+                for s in client.list_spaces()
+                if not (s.get("is_self") or s.get("isSelf"))
+            }
+        except Exception:  # noqa: BLE001 - a hiccup while polling is not a failure to pair
+            return set()
+
+    before = shared_spaces()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        time.sleep(poll)
+        new = shared_spaces() - before
+        if new:
+            return sorted(new)[0]
+    return None

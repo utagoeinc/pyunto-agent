@@ -73,6 +73,23 @@ def _connect() -> tuple[PyuntoClient, WrappedSpaceKeyProvider, IdentityStore]:
     return client, keys, identity
 
 
+def _answer_entries(args, client) -> int:  # noqa: ANN001
+    """Listen, and reply to diary entries. Shared by `run` and by `pair` once it is paired."""
+    backend = make_backend(args.backend, command=args.command, url=args.url, model=args.model)
+    bridge = Bridge(
+        client, backend, _persona(args.persona),
+        space_ids=set(args.space) if args.space else None,
+        history=args.history,
+        dry_run=getattr(args, "dry_run", False),
+        silent=args.silent,
+    )
+    try:
+        bridge.run()
+    except KeyboardInterrupt:
+        bridge.stop()
+    return 0
+
+
 def _persona(path: str | None) -> str:
     if path:
         return Path(path).read_text().strip()
@@ -116,6 +133,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="where the diary would be decrypted (default: this machine)")
     p_pair.add_argument("--big", action="store_true",
                         help="draw the square larger; use it when a phone will not scan")
+    p_pair.add_argument("--no-run", action="store_true",
+                        help="draw the square and exit, instead of answering once paired")
+    p_pair.add_argument("--backend", default=os.environ.get("PYUNTO_BACKEND", "claude-api"),
+                        choices=["claude-api", "command", "http"])
+    p_pair.add_argument("--command", default=os.environ.get("PYUNTO_COMMAND"))
+    p_pair.add_argument("--url", default=os.environ.get("PYUNTO_BACKEND_URL"))
+    p_pair.add_argument("--model", default=os.environ.get("PYUNTO_MODEL"))
+    p_pair.add_argument("--persona", default=os.environ.get("PYUNTO_PERSONA"))
+    p_pair.add_argument("--history", type=int, default=12)
+    p_pair.add_argument("--silent", action="store_true",
+                        help="reply without push notifications")
     p_serve = sub.add_parser("serve", help="hosted mode: HTTP control API + bridge for all joined spaces")
     p_serve.add_argument("--listen", default=os.environ.get("PYUNTO_AGENT_LISTEN", "127.0.0.1:8788"))
     p_serve.add_argument("--backend", default=os.environ.get("PYUNTO_BACKEND", "claude-api"),
@@ -160,20 +188,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "run":
-        backend = make_backend(args.backend, command=args.command, url=args.url, model=args.model)
-        bridge = Bridge(
-            client, backend, _persona(args.persona),
-            space_ids=set(args.space) if args.space else None,
-            history=args.history, dry_run=args.dry_run, silent=args.silent,
-        )
-        try:
-            bridge.run()
-        except KeyboardInterrupt:
-            bridge.stop()
-        return 0
+        return _answer_entries(args, client)
 
     if args.cmd == "pair":
-        from .pairing import encode_payload, pairing_payload, render_qr
+        from .pairing import encode_payload, pairing_payload, render_qr, wait_for_scan
 
         payload = pairing_payload(
             user_id=client.uuid,
@@ -197,7 +215,22 @@ def main(argv: list[str] | None = None) -> int:
         print("The app asks which space, and shows who runs this agent before anything is shared.")
         print("Nothing here is secret: it names the account asking, and the decision stays with")
         print("whoever holds the phone.")
-        return 0
+        if args.no_run:
+            return 0
+
+        # Wait for the scan, then answer. Drawing a square and exiting made the person run a
+        # second command, and gave them no way to tell whether the scan had worked -- the
+        # square just sat there either way. Scanning is the approval; there is nothing left
+        # to decide, so there is no reason to make them come back to the terminal.
+        print()
+        print("waiting for the scan… (Ctrl-C to stop)")
+        space_id = wait_for_scan(client)
+        if space_id is None:
+            print("Nobody scanned it. Run this again when you are ready.")
+            return 1
+        print(f"paired — joined a space. Answering entries now.\n")
+        args.space = [space_id]
+        return _answer_entries(args, client)
 
     if args.cmd == "mcp":
         from .mcp_server import MCPServer
