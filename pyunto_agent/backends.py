@@ -43,6 +43,10 @@ class Context:
     # Bridge replies for it -- but one that posts on its own (a robot narrating progress)
     # does. Defaulted so existing backends and callers are untouched.
     chat_space_id: str = ""
+    # Who wrote the entry being answered. A backend that posts on its own needs it to say
+    # who the reply is for, so that person's phone notifies them; without it the server
+    # falls back to every thread member and their own settings decide.
+    sender_uuid: str = ""
     extra: dict = field(default_factory=dict)
 
     def as_json(self) -> dict:

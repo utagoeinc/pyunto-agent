@@ -253,6 +253,7 @@ class PyuntoClient:
         text: str,
         thread_id: str | None = None,
         mentioned_users: list[str] | None = None,
+        notify_users: list[str] | None = None,
         silent: bool = False,
     ) -> dict[str, Any]:
         """Post an encrypted message. thread_id=None creates a new thread.
@@ -260,8 +261,11 @@ class PyuntoClient:
         silent=True adds mentioned_users as thread participants but sends no push (the app's
         🤫 mode). Replies into an existing thread reach every thread member either way.
 
-        Replies into an existing thread notify every thread member, so the robot does not
-        need to mention anyone to be seen (messageController.ts:607).
+        `notify_users` names who should get a push. Pass it: without it the server falls back
+        to "every thread member", and the recipient's own notification settings then decide --
+        a phone set to mentions-only stays silent, which is how an agent ends up answering
+        perfectly while the person never learns it replied. `mentioned_users` is not the same
+        field and cannot do this job: it governs who can SEE the thread, so it holds everyone.
         """
         key = self.keys.get_key(chat_space_id)
         enc = encrypt_message(text, key)
@@ -275,6 +279,8 @@ class PyuntoClient:
             payload["thread_id"] = thread_id
         if mentioned_users:
             payload["mentioned_users"] = [u.lower() for u in mentioned_users]
+        if notify_users:
+            payload["notify_users"] = [u.lower() for u in notify_users]
         if silent:
             payload["silent"] = True
 

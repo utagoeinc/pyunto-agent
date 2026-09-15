@@ -230,7 +230,17 @@ class Bridge:
         if self.dry_run:
             log.info("(dry-run) -> %s", reply)
             return reply
-        self.client.send(m.chat_space_id, reply, thread_id=m.thread_id, silent=self.silent)
+        # Notify the person who wrote to us, by name.
+        #
+        # Without this the server falls back to "everyone in the thread", and each of their
+        # notification settings then decides -- a phone set to mentions-only shows nothing.
+        # The agent answers correctly and the person never learns it replied, which is exactly
+        # what happened: the reply was in the diary, and no notification arrived.
+        self.client.send(
+            m.chat_space_id, reply, thread_id=m.thread_id,
+            notify_users=[m.sender_uuid] if m.sender_uuid else None,
+            silent=self.silent,
+        )
         self._sent.append(time.time())
         log.info("-> %s", reply[:120])
         return reply
@@ -265,7 +275,8 @@ class Bridge:
             self.refresh_spaces()
             space_name = self._space_names.get(m.chat_space_id.lower(), "diary")
         return Context(space_name=space_name, thread_id=m.thread_id, turns=turns,
-                       persona=self.persona, chat_space_id=m.chat_space_id)
+                       persona=self.persona, chat_space_id=m.chat_space_id,
+                       sender_uuid=m.sender_uuid)
 
     def _rate_ok(self) -> bool:
         now = time.time()
