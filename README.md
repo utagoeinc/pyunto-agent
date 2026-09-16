@@ -67,14 +67,14 @@ Some shapes this takes:
 
 | Service | The persona does what a chatbot will not |
 |---|---|
-| **Strength coach** | Demands the numbers, remembers last week's, refuses to praise a skipped session |
-| **Language tutor** | Corrects every message, keeps a running list of the learner's own mistakes, escalates difficulty |
-| **Clinic follow-up** | Asks the post-operative questions in order, every day, and flags the answers a nurse should see |
-| **Nutritionist** | Reads the meal photographs, keeps the week's running total, notices the pattern rather than the meal |
-| **Study supervisor** | Holds a student to a revision schedule, asks what was actually covered, will not accept "I studied" |
-| **Property manager** | Tenants report a problem in the same thread each time; the agent triages, asks for a photograph, and escalates |
-| **Field inspection** | An engineer photographs a site; the agent records it against the job and asks for what is missing |
-| **Sobriety or habit support** | Checks in at the hour that matters, keeps the streak, responds to a relapse the way you told it to |
+| 🏋️ **Strength coach** | Demands the numbers, remembers last week's, refuses to praise a skipped session |
+| 🗣️ **Language tutor** | Corrects every message, keeps a running list of the learner's own mistakes, escalates difficulty |
+| 🏥 **Clinic follow-up** | Asks the post-operative questions in order, every day, and flags the answers a nurse should see |
+| 🥗 **Nutritionist** | Reads the meal photographs, keeps the week's running total, notices the pattern rather than the meal |
+| 📚 **Study supervisor** | Holds a student to a revision schedule, asks what was actually covered, will not accept "I studied" |
+| 🔧 **Property manager** | Tenants report a problem in the same thread each time; the agent triages, asks for a photograph, and escalates |
+| 📐 **Field inspection** | An engineer photographs a site; the agent records it against the job and asks for what is missing |
+| 📅 **Sobriety or habit support** | Checks in at the hour that matters, keeps the streak, responds to a relapse the way you told it to |
 
 What makes these work here rather than in a chat window:
 
