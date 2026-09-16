@@ -34,6 +34,6 @@ def test_seal_round_trip():
 
 
 def test_item_marker_preview():
-    m = item_marker("薬", "💊", ["血圧の薬", "胃薬", "胃薬"])
-    assert m == "!item:薬:💊:血圧の薬|胃薬|胃薬"
-    assert marker_preview(m) == "💊 血圧の薬, 胃薬 ×2 (薬)"
+    m = item_marker("medicine", "💊", ["blood pressure", "stomach", "stomach"])
+    assert m == "!item:medicine:💊:blood pressure|stomach|stomach"
+    assert marker_preview(m) == "💊 blood pressure, stomach ×2 (medicine)"

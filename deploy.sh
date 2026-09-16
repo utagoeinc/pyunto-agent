@@ -7,7 +7,7 @@ set -e
 cd "$(dirname "$0")"
 rsync -av --delete \
   --include='/Dockerfile' --include='/pyproject.toml' --include='/README.md' \
-  --include='/persona.md' --include='/DEPLOY.ja.md' --include='/.dockerignore' \
+  --include='/persona.md' --include='/DEPLOY.md' --include='/.dockerignore' \
   --include='/pyunto_agent/' --include='/pyunto_agent/*.py' \
   --exclude='*' \
   ./ "$1/"

@@ -45,25 +45,25 @@ def server(threads: dict[str, list]) -> MCPServer:
 
 def test_repeats_are_counted_not_collapsed():
     """Writing the same item twice means it happened twice. That is the whole feature."""
-    s = server({"t1": [entry(item_marker("薬", "💊", ["朝の薬", "朝の薬", "夜の薬"]), 1)]})
+    s = server({"t1": [entry(item_marker("medicine", "💊", ["morning pill", "morning pill", "evening pill"]), 1)]})
     result = s._quick_list_stats("sp", 7, None)
     items = {i["item"]: i["count"] for i in result["lists"][0]["items"]}
-    assert items == {"朝の薬": 2, "夜の薬": 1}
+    assert items == {"morning pill": 2, "evening pill": 1}
 
 
 def test_counts_span_threads():
     """A diary records across days, so the tally has to cross threads."""
     s = server({
-        "t1": [entry(item_marker("薬", "💊", ["朝の薬"]), 1)],
-        "t2": [entry(item_marker("薬", "💊", ["朝の薬"]), 2)],
+        "t1": [entry(item_marker("medicine", "💊", ["morning pill"]), 1)],
+        "t2": [entry(item_marker("medicine", "💊", ["morning pill"]), 2)],
     })
     assert s._quick_list_stats("sp", 7, None)["lists"][0]["total"] == 2
 
 
 def test_entries_outside_the_window_are_excluded():
     s = server({"t1": [
-        entry(item_marker("薬", "💊", ["朝の薬"]), 1),
-        entry(item_marker("薬", "💊", ["朝の薬"]), 40),
+        entry(item_marker("medicine", "💊", ["morning pill"]), 1),
+        entry(item_marker("medicine", "💊", ["morning pill"]), 40),
     ]})
     assert s._quick_list_stats("sp", 7, None)["lists"][0]["total"] == 1
     assert s._quick_list_stats("sp", 60, None)["lists"][0]["total"] == 2
@@ -71,17 +71,17 @@ def test_entries_outside_the_window_are_excluded():
 
 def test_ordinary_entries_are_ignored():
     """Only quick-list markers count; a diary is mostly prose."""
-    s = server({"t1": [entry("今日はよく歩いた", 1)]})
+    s = server({"t1": [entry("walked a lot today", 1)]})
     assert s._quick_list_stats("sp", 7, None)["lists"] == []
 
 
 def test_one_list_can_be_singled_out():
     s = server({"t1": [
-        entry(item_marker("薬", "💊", ["朝の薬"]), 1),
-        entry(item_marker("絵本", "📖", ["ぐりとぐら"]), 1),
+        entry(item_marker("medicine", "💊", ["morning pill"]), 1),
+        entry(item_marker("picture books", "📖", ["Guri and Gura"]), 1),
     ]})
-    result = s._quick_list_stats("sp", 7, "薬")
-    assert [lst["list_name"] for lst in result["lists"]] == ["薬"]
+    result = s._quick_list_stats("sp", 7, "medicine")
+    assert [lst["list_name"] for lst in result["lists"]] == ["medicine"]
 
 
 def test_an_unreadable_thread_does_not_lose_the_others():
@@ -92,22 +92,22 @@ def test_an_unreadable_thread_does_not_lose_the_others():
             return super().get_messages(thread_id, space_id)
 
     s = MCPServer.__new__(MCPServer)
-    s.client = Broken({"bad": [], "t1": [entry(item_marker("薬", "💊", ["朝の薬"]), 1)]})
+    s.client = Broken({"bad": [], "t1": [entry(item_marker("medicine", "💊", ["morning pill"]), 1)]})
     assert s._quick_list_stats("sp", 7, None)["lists"][0]["total"] == 1
 
 
 def test_an_undated_entry_is_counted_rather_than_dropped():
     """Leaving a recorded dose out of a tally is worse than counting a slightly old one."""
-    s = server({"t1": [SimpleNamespace(text=item_marker("薬", "💊", ["朝の薬"]), raw={})]})
+    s = server({"t1": [SimpleNamespace(text=item_marker("medicine", "💊", ["morning pill"]), raw={})]})
     assert s._quick_list_stats("sp", 7, None)["lists"][0]["total"] == 1
 
 
 def test_items_are_ordered_by_how_often_they_happened():
-    s = server({"t1": [entry(item_marker("薬", "💊", ["夜の薬", "朝の薬", "朝の薬"]), 1)]})
+    s = server({"t1": [entry(item_marker("medicine", "💊", ["evening pill", "morning pill", "morning pill"]), 1)]})
     items = s._quick_list_stats("sp", 7, None)["lists"][0]["items"]
-    assert [i["item"] for i in items] == ["朝の薬", "夜の薬"]
+    assert [i["item"] for i in items] == ["morning pill", "evening pill"]
 
 
-@pytest.mark.parametrize("text", ["", "!item:", "!item:薬", "!item:薬:💊", "!item:薬:💊:"])
+@pytest.mark.parametrize("text", ["", "!item:", "!item:medicine", "!item:medicine:💊", "!item:medicine:💊:"])
 def test_malformed_markers_are_ignored(text):
     assert parse_item_marker(text) is None

@@ -46,6 +46,12 @@ stays with whoever holds the phone.
 Without `PYUNTO_EMAIL` the agent uses an anonymous account named `PYUNTO_AGENT_NAME` (default
 "Claude"); the device id and identity key live in `~/.pyunto-agent/`.
 
+### Longer guides
+
+* [GUIDE.md](GUIDE.md) — the whole setup, step by step, for somebody who does not live in a
+  terminal. Uses Claude Code (`claude -p`) rather than an API key.
+* [DEPLOY.md](DEPLOY.md) — running `pyunto-agent serve` in a container alongside the server.
+
 ### Pairing from the app instead
 
 If someone else set the agent up for you, go the other way:

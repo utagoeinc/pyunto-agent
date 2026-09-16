@@ -54,12 +54,12 @@ def entry(text: str, *, notify=None, silent: bool = False) -> IncomingMessage:
 
 def test_two_person_diary_answers_everything():
     b = make_bridge(members=2)
-    assert b._should_reply(entry("きょうは疲れた")) is True
+    assert b._should_reply(entry("a tiring day")) is True
 
 
 def test_two_person_diary_answers_even_when_quiet():
     b = make_bridge(members=2)
-    assert b._should_reply(entry("そっと残す", silent=True)) is True
+    assert b._should_reply(entry("a quiet note", silent=True)) is True
 
 
 # -- two humans + the agent is already a group --------------------------------------
@@ -71,41 +71,41 @@ def test_two_humans_plus_agent_is_a_group_not_a_one_on_one():
     be addressed. Counting only humans here would make it answer everything again.
     """
     b = make_bridge(members=3)  # Alice + Bob + Claude
-    assert b._should_reply(entry("@Bob おつかれ", notify=[BOB])) is False
-    assert b._should_reply(entry("@Claude おつかれ", notify=[AGENT])) is True
+    assert b._should_reply(entry("@Bob well done", notify=[BOB])) is False
+    assert b._should_reply(entry("@Claude well done", notify=[AGENT])) is True
 
 
 # -- group of three or more ---------------------------------------------------------
 
 def test_group_ignores_entry_addressed_to_someone_else():
     b = make_bridge(members=3)
-    assert b._should_reply(entry("@Bob みてね", notify=[BOB])) is False
+    assert b._should_reply(entry("@Bob take a look", notify=[BOB])) is False
 
 
 def test_group_answers_when_mentioned_by_name():
     b = make_bridge(members=3)
-    assert b._should_reply(entry("@Claude どう思う？", notify=[AGENT])) is True
+    assert b._should_reply(entry("@Claude what do you think?", notify=[AGENT])) is True
 
 
 def test_group_answers_when_mentioned_alongside_a_person():
     b = make_bridge(members=3)
-    assert b._should_reply(entry("@Bob @Claude みてね", notify=[BOB, AGENT])) is True
+    assert b._should_reply(entry("@Bob @Claude take a look", notify=[BOB, AGENT])) is True
 
 
 def test_group_answers_when_sent_to_everyone():
     b = make_bridge(members=3)
-    assert b._should_reply(entry("みんなおつかれさま")) is True
+    assert b._should_reply(entry("well done everyone")) is True
 
 
 def test_group_stays_out_of_quiet_entries():
     b = make_bridge(members=3)
-    assert b._should_reply(entry("ひとりごと", silent=True)) is False
+    assert b._should_reply(entry("thinking aloud", silent=True)) is False
 
 
 def test_group_answers_mention_from_a_client_without_notify_users():
     # Older clients send no notify_users at all; the text is then the only evidence.
     b = make_bridge(members=3)
-    assert b._should_reply(entry("@Claude おしえて", notify=None)) is True
+    assert b._should_reply(entry("@Claude tell me", notify=None)) is True
 
 
 def test_member_count_is_cached():
@@ -129,17 +129,17 @@ ROBOT_NAME = "🤖 Momo"
 
 def test_robot_in_two_person_diary_answers_everything():
     b = make_bridge(members=2, display_name=ROBOT_NAME)
-    assert b._should_reply(entry("ただいま")) is True
+    assert b._should_reply(entry("I am home")) is True
 
 
 def test_robot_in_group_ignores_entry_addressed_to_someone_else():
     b = make_bridge(members=3, display_name=ROBOT_NAME)
-    assert b._should_reply(entry("@Bob みてね", notify=[BOB])) is False
+    assert b._should_reply(entry("@Bob take a look", notify=[BOB])) is False
 
 
 def test_robot_in_group_answers_when_addressed():
     b = make_bridge(members=3, display_name=ROBOT_NAME)
-    assert b._should_reply(entry("@🤖 Momo きて", notify=[AGENT])) is True
+    assert b._should_reply(entry("@🤖 Momo come here", notify=[AGENT])) is True
 
 
 def test_robot_answers_a_hand_typed_mention_without_the_marker():
@@ -149,14 +149,14 @@ def test_robot_answers_a_hand_typed_mention_without_the_marker():
     contain the robot; the text is the only evidence it was being addressed.
     """
     b = make_bridge(members=3, display_name=ROBOT_NAME)
-    assert b._should_reply(entry("@Momo こっちきて", notify=None)) is True
+    assert b._should_reply(entry("@Momo come over here", notify=None)) is True
 
 
 def test_robot_in_group_stays_out_of_quiet_entries():
     b = make_bridge(members=3, display_name=ROBOT_NAME)
-    assert b._should_reply(entry("ひとりごと", silent=True)) is False
+    assert b._should_reply(entry("thinking aloud", silent=True)) is False
 
 
 def test_robot_in_group_answers_when_sent_to_everyone():
     b = make_bridge(members=3, display_name=ROBOT_NAME)
-    assert b._should_reply(entry("みんなおつかれ")) is True
+    assert b._should_reply(entry("well done all")) is True
