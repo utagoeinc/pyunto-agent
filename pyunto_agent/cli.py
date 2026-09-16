@@ -133,6 +133,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="where the diary would be decrypted (default: this machine)")
     p_pair.add_argument("--big", action="store_true",
                         help="draw the QR code larger; use it when a phone will not scan")
+    p_pair.add_argument("--image", metavar="FILE",
+                        help="also write the QR code to a file (.svg or .png) to send to "
+                             "clients; implies --no-run")
     p_pair.add_argument("--no-run", action="store_true",
                         help="draw the QR code and exit, instead of answering once paired")
     p_pair.add_argument("--backend", default=os.environ.get("PYUNTO_BACKEND", "claude-api"),
@@ -191,7 +194,13 @@ def main(argv: list[str] | None = None) -> int:
         return _answer_entries(args, client)
 
     if args.cmd == "pair":
-        from .pairing import encode_payload, pairing_payload, render_qr, wait_for_scan
+        from .pairing import (
+            encode_payload,
+            pairing_payload,
+            render_qr,
+            save_qr,
+            wait_for_scan,
+        )
 
         payload = pairing_payload(
             user_id=client.uuid,
@@ -201,6 +210,26 @@ def main(argv: list[str] | None = None) -> int:
             runtime=args.runtime,
         )
         text = encode_payload(payload)
+
+        if args.image:
+            # Asked for a file, so do not also fill the terminal with a QR nobody will scan
+            # from there. A service hands this to clients: on a booking page, in a welcome
+            # email, printed on a card. Waiting at the terminal makes no sense for that, so
+            # it exits rather than listening.
+            try:
+                written = save_qr(text, args.image)
+            except RuntimeError as e:
+                print(f"\nERROR: {e}")
+                return 1
+            print()
+            print(f"Written to {written} — send this to whoever should be able to reach the")
+            print(f"agent. Each person who scans it lets {client.display_name} into their own")
+            print("diary; the code names the account asking and nothing else.")
+            print()
+            print("Then answer all of them at once:")
+            print("    pyunto-agent run --backend claude-api --persona your-persona.md")
+            return 0
+
         qr = render_qr(text, big=args.big)
         print()
         if qr:

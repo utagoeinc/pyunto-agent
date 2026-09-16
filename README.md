@@ -145,31 +145,80 @@ puts a robot at the other end instead of a language model: you write "go and fin
 sunlight" and a simulated — or real — machine does it and reports back with photographs. It is
 built on this package, and pairs the same way.
 
-## Quick start
+## Quick start: a personal trainer your clients message
 
-Four commands, and the agent is answering your diary.
+Building a real service, from nothing to a client's phone.
+
+### 1. Install
 
 ```bash
-git clone https://github.com/utagoeinc/pyunto-agent
-cd pyunto-agent
-python3 -m venv .venv && .venv/bin/pip install -e '.[dev,qr]'
-cp .env.example .env                       # put your ANTHROPIC_API_KEY in it
-
-.venv/bin/pyunto-agent pair --operator "your name"
+pip install 'pyunto-agent[qr] @ git+https://github.com/utagoeinc/pyunto-agent'
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-A QR code appears in the terminal. Scan it with the Pyunto app, choose which diary to let the
-agent into, and approve — **the agent then starts answering by itself.** No second command.
+### 2. Write the trainer
+
+This file is the service. Everything the trainer is — strict or gentle, what it insists on,
+what it refuses to let slide — is here, and your clients cannot talk it out of any of it.
+
+```bash
+cat > trainer.md <<'EOF'
+You are a strength coach. Each client logs their sessions in this diary.
+
+- Always ask for the numbers: exercise, weight, sets, reps. "I trained today" is not a log --
+  ask what they lifted.
+- Compare against their recent sessions before responding. If the weight has not moved in
+  three weeks, say so.
+- If they skipped a session, ask what happened. Once. Then move on.
+- No motivational speeches. One line of encouragement, only when the numbers earn it.
+- Never give medical advice. Pain goes to a doctor, and say so plainly.
+- Reply in the language they wrote in. Two to four sentences.
+EOF
+```
+
+### 3. Make a QR code to hand out
+
+```bash
+pyunto-agent pair --operator "Sano Fitness" --image trainer-qr.png
+```
 
 ```
-waiting for the scan… (Ctrl-C to stop)
-paired — joined a space. Answering entries now.
+Written to trainer-qr.png — send this to whoever should be able to reach the
+agent. Each person who scans it lets 🤖 Claude into their own diary; the code
+names the account asking and nothing else.
 ```
 
-Write an entry in that diary and the agent replies in the same thread.
+Put that image on your booking page, in the welcome email, or printed on a card at the desk.
+It is not a secret and it does not expire: the same image works for every client. Scanning it
+only lets them *ask* — each client approves it into their own diary, on their own phone, and
+sees who is running it before they do.
 
-Open the space once in the app after approving. The diary is end-to-end encrypted, so a member
-hands the agent a key; the server cannot.
+Use `.svg` instead of `.png` for print, or when Pillow is not installed.
+
+### 4. Start answering
+
+```bash
+pyunto-agent run --backend claude-api --persona trainer.md
+```
+
+One process serves every client who has scanned the code. A client writes:
+
+> Bench 80kg 5x5, felt heavy on the last set
+
+and the trainer replies in their diary, having read what they lifted last week — as a
+notification on their phone, in an app they already have.
+
+Each client's diary is separate and end-to-end encrypted. Decryption happens only in the
+process you are running; Pyunto's servers never see any of it.
+
+### Just trying it yourself?
+
+Skip the persona and pair without an image — the QR code appears in the terminal, and the
+agent starts answering as soon as you scan it:
+
+```bash
+pyunto-agent pair --operator "your name"
+```
 
 ### Details
 

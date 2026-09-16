@@ -17,6 +17,7 @@ code therefore grants nothing -- the worst it can do is let someone ask.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 # The app matches on this. Kept distinct from "device-link" (a second device for one person)
@@ -147,3 +148,51 @@ def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: A
         if new:
             return sorted(new)[0]
     return None
+
+
+def save_qr(text: str, path: str | Path) -> Path:
+    """Write the pairing QR to a file, and return where it went.
+
+    A terminal QR is for the person sitting at the machine. A service handing this to clients
+    needs a file: on a booking page, in a welcome email, printed on a card by the door. The
+    format follows the extension.
+
+    Two formats. SVG needs nothing beyond `qrcode` and scales to any size, so it is the right
+    choice for print. PNG needs Pillow, which this package does not require -- if it is
+    missing, that is said plainly rather than raised as an ImportError about a module the
+    reader never mentioned. Anything else is refused: `qrcode` writes PNG bytes regardless of
+    the extension, so a `.jpg` would be a PNG under the wrong name.
+    """
+    import qrcode
+
+    path = Path(path)
+    qr = qrcode.QRCode(border=4, box_size=10)
+    qr.add_data(text)
+    qr.make(fit=True)
+
+    if path.suffix.lower() == ".svg":
+        import qrcode.image.svg
+
+        qr.make_image(image_factory=qrcode.image.svg.SvgPathImage).save(str(path))
+        return path
+
+    if path.suffix.lower() != ".png":
+        # `qrcode` writes PNG bytes whatever the extension says, so a .jpg would be a PNG
+        # wearing the wrong name -- and something that will not open where somebody uploads
+        # it. Refuse rather than produce that.
+        raise RuntimeError(
+            f"Cannot write {path.suffix or 'a file with no extension'}. Use .svg (nothing "
+            f"extra needed, scales for print) or .png (needs Pillow)."
+        )
+
+    try:
+        import PIL  # noqa: F401
+    except ImportError as e:
+        raise RuntimeError(
+            "PNG needs Pillow, which pyunto-agent does not install.\n"
+            "    pip install pillow\n"
+            f"Or write an SVG instead, which needs nothing extra: "
+            f"--image {path.with_suffix('.svg')}"
+        ) from e
+    qr.make_image().save(str(path))
+    return path
