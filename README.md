@@ -16,7 +16,7 @@ robot at the other end
 The same package, the same account, the same keys. What differs is **who starts the
 conversation**.
 
-### 1. Push — the agent answers your diary
+### 1. Agent — it writes to your users
 
 You write; it replies, unprompted, in the same thread.
 
@@ -38,14 +38,60 @@ You write; it replies, unprompted, in the same thread.
               (ciphertext only, never plaintext)
 ```
 
-**How you invite it:** run `pyunto-agent pair`, scan the square with the app, choose a diary.
+**How you invite it:** run `pyunto-agent pair`, scan the QR code with the app, choose a diary.
 The agent starts answering as soon as you approve.
 
-**What it is for:** an exchange diary with something that always writes back. A partner for
-daily entries, a reflective prompt at the end of the day, a second voice in a shared space.
-It runs continuously and speaks on its own.
+**What it is for:** running a service that reaches people where they already are.
 
-### 2. Pull (MCP) — you ask Claude about your diary
+A general-purpose chatbot is a website somebody has to remember to visit, in a tab with no
+memory of them. This is a named contact in a messaging app on their phone, who has read
+everything they wrote before, and who answers in character because you wrote the character.
+
+That character is a file. `--persona coach.md` is the whole difference between a polite
+assistant and a service worth paying for:
+
+```markdown
+You are a strength coach. Your client logs every session here.
+
+- Hold them to the programme. If they skipped legs again, say so plainly.
+- Always ask for the numbers: weight, sets, reps. A session without numbers is not logged.
+- Compare against last week before you praise anything.
+- No pep talk. One sentence of encouragement, only when it is earned.
+```
+
+```bash
+pyunto-agent run --backend claude-api --persona coach.md
+```
+
+Some shapes this takes:
+
+| Service | The persona does what a chatbot will not |
+|---|---|
+| **Strength coach** | Demands the numbers, remembers last week's, refuses to praise a skipped session |
+| **Language tutor** | Corrects every message, keeps a running list of the learner's own mistakes, escalates difficulty |
+| **Clinic follow-up** | Asks the post-operative questions in order, every day, and flags the answers a nurse should see |
+| **Nutritionist** | Reads the meal photographs, keeps the week's running total, notices the pattern rather than the meal |
+| **Study supervisor** | Holds a student to a revision schedule, asks what was actually covered, will not accept "I studied" |
+| **Property manager** | Tenants report a problem in the same thread each time; the agent triages, asks for a photograph, and escalates |
+| **Field inspection** | An engineer photographs a site; the agent records it against the job and asks for what is missing |
+| **Sobriety or habit support** | Checks in at the hour that matters, keeps the streak, responds to a relapse the way you told it to |
+
+What makes these work here rather than in a chat window:
+
+* **The persona holds.** It is a file you control, not a prompt the user can talk their way
+  out of.
+* **It remembers.** `--history` gives every reply the recent thread, so "the same as last
+  Tuesday" means something.
+* **It is on their phone.** A notification arrives; they reply in a messaging app they already
+  have. No login, no tab, no app to learn.
+* **You see nothing.** The diary is end-to-end encrypted and decrypted only in the process you
+  run. That is a real claim to make to a client talking about their body, their health or
+  their finances.
+* **One process, many clients.** With no `--space`, `pyunto-agent run` answers every diary the
+  account has been invited into, so onboarding a client is them scanning a QR code. Use
+  `--space` to pin one agent to one client.
+
+### 2. MCP — you ask Claude about a diary
 
 Nothing runs in the background. Claude Code or Claude Desktop reaches into the diary when you
 ask it to.
@@ -73,7 +119,7 @@ ask it to.
 there answering — then register it with your MCP client once:
 
 ```bash
-pyunto-agent pair --no-run      # scan the square, then it exits
+pyunto-agent pair --no-run      # scan the QR code, then it exits
 claude mcp add pyunto -- "$(pwd)/.venv/bin/pyunto-agent" mcp
 ```
 
@@ -83,12 +129,13 @@ answers. You start every exchange; it never speaks unasked.
 
 ### Which one?
 
-| | Push (`run`) | Pull (`mcp`) |
+| | Agent (`run`) | MCP (`mcp`) |
 |---|---|---|
 | Who speaks first | the agent | you |
 | Runs in the background | yes, continuously | no, only when asked |
-| Where you talk to it | the Pyunto app | Claude Code / Desktop |
-| Typical use | a diary partner that replies | your diary as searchable memory |
+| Where the person talks to it | the Pyunto app, on their phone | Claude Code / Desktop |
+| Who it is for | **a service and its users** | one person and their own diary |
+| Typical use | a coach, a tutor, a desk that answers | searching and summarising your entries |
 
 Both can be paired into the same diary at once — they are the same account, and nothing stops
 `run` answering on your phone while `mcp` reads the same entries from your desk.
@@ -111,7 +158,7 @@ cp .env.example .env                       # put your ANTHROPIC_API_KEY in it
 .venv/bin/pyunto-agent pair --operator "your name"
 ```
 
-A square appears in the terminal. Scan it with the Pyunto app, choose which diary to let the
+A QR code appears in the terminal. Scan it with the Pyunto app, choose which diary to let the
 agent into, and approve — **the agent then starts answering by itself.** No second command.
 
 ```
@@ -126,8 +173,8 @@ hands the agent a key; the server cannot.
 
 ### Details
 
-Add `--no-run` to draw the square and exit, if you would rather start it yourself later with
-`pyunto-agent run`. The square holds no secret: it names the account asking, and the decision
+Add `--no-run` to draw the QR code and exit, if you would rather start it yourself later with
+`pyunto-agent run`. The QR code holds no secret: it names the account asking, and the decision
 stays with whoever holds the phone.
 
 Without `PYUNTO_EMAIL` the agent uses an anonymous account named `PYUNTO_AGENT_NAME` (default
@@ -159,15 +206,15 @@ If someone else set the agent up for you, go the other way:
 3. Open the space once in the app, so the space key is shared with the agent's identity key.
 4. `pyunto-agent whoami` should now show `key=yes` for that space.
 
-## Push: Claude API replies
+## Agent: Claude API replies
 
 ```bash
-pyunto-agent run --backend claude-api --persona persona.md          # replies with push
-pyunto-agent run --backend claude-api --silent                      # replies without push
+pyunto-agent run --backend claude-api --persona persona.md   # replies, phone notification
+pyunto-agent run --backend claude-api --silent               # replies, no notification
 pyunto-agent run --backend claude-api --dry-run                     # log replies, do not post
 ```
 
-## Push: Claude Code as the partner
+## Agent: Claude Code as the partner
 
 ```bash
 pyunto-agent run --backend command --command 'claude -p --output-format json'
@@ -177,7 +224,7 @@ The command gets the prompt on stdin (JSON with the persona, the thread so far, 
 and its stdout is used as the reply (`{"result": …}`, `{"reply": …}`, or plain text). Add
 `{prompt}` to the command to pass the prompt as an argument instead.
 
-## Pull: Pyunto as MCP tools
+## MCP: Pyunto as tools for Claude
 
 ```bash
 claude mcp add pyunto -- "$(pwd)/.venv/bin/pyunto-agent" mcp

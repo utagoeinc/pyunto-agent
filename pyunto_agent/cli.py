@@ -132,9 +132,9 @@ def main(argv: list[str] | None = None) -> int:
                         choices=["self_hosted", "hosted", "endpoint"],
                         help="where the diary would be decrypted (default: this machine)")
     p_pair.add_argument("--big", action="store_true",
-                        help="draw the square larger; use it when a phone will not scan")
+                        help="draw the QR code larger; use it when a phone will not scan")
     p_pair.add_argument("--no-run", action="store_true",
-                        help="draw the square and exit, instead of answering once paired")
+                        help="draw the QR code and exit, instead of answering once paired")
     p_pair.add_argument("--backend", default=os.environ.get("PYUNTO_BACKEND", "claude-api"),
                         choices=["claude-api", "command", "http"])
     p_pair.add_argument("--command", default=os.environ.get("PYUNTO_COMMAND"))
@@ -206,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
         if qr:
             print(qr)
         else:
-            print("(install the 'qr' extra to draw this as a scannable square:")
+            print("(install the 'qr' extra to draw this as a scannable QR code:")
             print("     pip install 'pyunto-agent[qr]')")
             print()
             print(text)
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.no_run:
             return 0
 
-        # Wait for the scan, then answer. Drawing a square and exiting made the person run a
+        # Wait for the scan, then answer. Drawing a QR code and exiting made the person run a
         # second command, and gave them no way to tell whether the scan had worked -- the
         # square just sat there either way. Scanning is the approval; there is nothing left
         # to decide, so there is no reason to make them come back to the terminal.

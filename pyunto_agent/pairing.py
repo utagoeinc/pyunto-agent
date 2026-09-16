@@ -109,7 +109,7 @@ def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: A
     """Block until this account is in a shared space, and return it.
 
     Printing a QR code and exiting makes the person run a second command, and -- worse --
-    gives them no way to tell whether the scan worked. The square just sits there. So the
+    gives them no way to tell whether the scan worked. The QR code just sits there. So the
     code that drew it waits for the answer, and the caller carries straight on.
 
     Returns a space id, or None if nobody scanned in time.
@@ -117,7 +117,7 @@ def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: A
     It returns a space it was ALREADY in, immediately, rather than waiting for a new one to
     appear. That is not a shortcut: a robot re-paired into the same space -- which is what
     happens every time somebody runs this twice -- joins nothing new, so waiting for a change
-    waits forever. The square was scanned, the app said yes, and the terminal sat there
+    waits forever. The QR code was scanned, the app said yes, and the terminal sat there
     saying "waiting for the scan…". Being already paired is success, not a reason to block.
 
     Polls rather than subscribes because membership is granted server-side and there is no
