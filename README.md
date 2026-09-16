@@ -46,6 +46,17 @@ stays with whoever holds the phone.
 Without `PYUNTO_EMAIL` the agent uses an anonymous account named `PYUNTO_AGENT_NAME` (default
 "Claude"); the device id and identity key live in `~/.pyunto-agent/`.
 
+### Installing without cloning
+
+If you only want to run the agent, not work on it — one line, no clone:
+
+```bash
+pip install 'pyunto-agent[qr] @ git+https://github.com/utagoeinc/pyunto-agent'
+pyunto-agent pair --operator "your name"
+```
+
+Neither package is on PyPI yet, which is why the install comes from git.
+
 ### Longer guides
 
 * [GUIDE.md](GUIDE.md) — the whole setup, step by step, for somebody who does not live in a
