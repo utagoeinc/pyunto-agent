@@ -106,16 +106,23 @@ def render_qr(text: str, big: bool = False) -> str | None:
 
 
 def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: ANN001
-    """Block until somebody scans the square and lets this account into a space.
+    """Block until this account is in a shared space, and return it.
 
     Printing a QR code and exiting makes the person run a second command, and -- worse --
     gives them no way to tell whether the scan worked. The square just sits there. So the
-    code that drew it waits for the answer, and the caller carries straight on into
-    listening: scan, approve, and the agent is live.
+    code that drew it waits for the answer, and the caller carries straight on.
 
-    Returns the space id that appeared, or None if nobody scanned in time. Polls rather than
-    subscribes because membership is granted server-side and there is no event for it; the
-    interval is slow enough to be invisible in a log and fast enough to feel immediate.
+    Returns a space id, or None if nobody scanned in time.
+
+    It returns a space it was ALREADY in, immediately, rather than waiting for a new one to
+    appear. That is not a shortcut: a robot re-paired into the same space -- which is what
+    happens every time somebody runs this twice -- joins nothing new, so waiting for a change
+    waits forever. The square was scanned, the app said yes, and the terminal sat there
+    saying "waiting for the scan…". Being already paired is success, not a reason to block.
+
+    Polls rather than subscribes because membership is granted server-side and there is no
+    event for it; the interval is slow enough to be invisible in a log and fast enough to
+    feel immediate.
     """
     import time
 
@@ -130,6 +137,9 @@ def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: A
             return set()
 
     before = shared_spaces()
+    if before:
+        return sorted(before)[0]
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         time.sleep(poll)
