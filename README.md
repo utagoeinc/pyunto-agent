@@ -4,12 +4,99 @@ Make an external agent the partner of a Pyunto exchange diary. The agent is an o
 its own Pyunto account, its own X25519 identity key, invited with the normal invite link. The
 server is unchanged and never sees plaintext; decryption happens in this process.
 
-Two ways to use it, same process:
+[**Pyunto for iPhone and iPad**](https://apps.apple.com/app/id6755097890) ·
+[**Pyunto for Android**](https://play.google.com/store/apps/details?id=com.pyunto.app) ·
+[**pyunto-robotics**](https://github.com/utagoeinc/pyunto-robotics) — the same idea, with a
+robot at the other end
 
-* **Push** — `pyunto-agent run` listens for entries and replies through a backend
-  (Claude API, Claude Code via `command`, or any HTTP endpoint).
-* **Pull (MCP)** — `pyunto-agent mcp` exposes the diary as MCP tools for Claude Code / Claude
-  Desktop / any MCP client.
+---
+
+## Two kinds of agent
+
+The same package, the same account, the same keys. What differs is **who starts the
+conversation**.
+
+### 1. Push — the agent answers your diary
+
+You write; it replies, unprompted, in the same thread.
+
+```
+     your phone                     your computer
+ ┌───────────────┐            ┌──────────────────────┐
+ │  Pyunto app   │            │  pyunto-agent run    │
+ │               │            │                      │
+ │  "tough day   │  ───────▶  │  reads the entry     │
+ │   at work"    │  encrypted │  decrypts it HERE    │
+ │               │            │        │             │
+ │               │            │        ▼             │
+ │  "that sounds │  ◀───────  │  Claude API, or      │
+ │   exhausting" │  encrypted │  Claude Code, or     │
+ └───────────────┘            │  your own HTTP URL   │
+                              └──────────────────────┘
+        │                                │
+        └────────  api.pyunto.com  ──────┘
+              (ciphertext only, never plaintext)
+```
+
+**How you invite it:** run `pyunto-agent pair`, scan the square with the app, choose a diary.
+The agent starts answering as soon as you approve.
+
+**What it is for:** an exchange diary with something that always writes back. A partner for
+daily entries, a reflective prompt at the end of the day, a second voice in a shared space.
+It runs continuously and speaks on its own.
+
+### 2. Pull (MCP) — you ask Claude about your diary
+
+Nothing runs in the background. Claude Code or Claude Desktop reaches into the diary when you
+ask it to.
+
+```
+     your computer
+ ┌────────────────────────┐
+ │  Claude Code / Desktop │
+ │            │           │        ┌──────────────────┐
+ │            ▼           │        │  your phone      │
+ │  "what did I write     │        │  Pyunto app      │
+ │   about the garden?"   │        │                  │
+ │            │           │        │  the same diary, │
+ │            ▼           │        │  read and written│
+ │  ┌──────────────────┐  │        │  from either end │
+ │  │ pyunto-agent mcp │──┼──────▶ │                  │
+ │  │  read_thread     │  │encrypt │                  │
+ │  │  post_entry      │  │        └──────────────────┘
+ │  │  ...12 tools     │  │
+ │  └──────────────────┘  │
+ └────────────────────────┘
+```
+
+**How you invite it:** pair it the same way, but with `--no-run` — this one should not sit
+there answering — then register it with your MCP client once:
+
+```bash
+pyunto-agent pair --no-run      # scan the square, then it exits
+claude mcp add pyunto -- "$(pwd)/.venv/bin/pyunto-agent" mcp
+```
+
+**What it is for:** using your diary as memory. Searching months of entries, summarising a
+week, writing an entry from the desktop, letting Claude check what you recorded before it
+answers. You start every exchange; it never speaks unasked.
+
+### Which one?
+
+| | Push (`run`) | Pull (`mcp`) |
+|---|---|---|
+| Who speaks first | the agent | you |
+| Runs in the background | yes, continuously | no, only when asked |
+| Where you talk to it | the Pyunto app | Claude Code / Desktop |
+| Typical use | a diary partner that replies | your diary as searchable memory |
+
+Both can be paired into the same diary at once — they are the same account, and nothing stops
+`run` answering on your phone while `mcp` reads the same entries from your desk.
+
+**A third kind lives elsewhere.** [pyunto-robotics](https://github.com/utagoeinc/pyunto-robotics)
+puts a robot at the other end instead of a language model: you write "go and find some
+sunlight" and a simulated — or real — machine does it and reports back with photographs. It is
+built on this package, and pairs the same way.
 
 ## Quick start
 
