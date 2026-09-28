@@ -152,7 +152,7 @@ Building a real service, from nothing to a client's phone.
 ### 1. Install
 
 ```bash
-pip install 'pyunto-agent[qr] @ git+https://github.com/utagoeinc/pyunto-agent'
+pip install 'pyunto-agent[qr]'
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -234,11 +234,15 @@ Without `PYUNTO_EMAIL` the agent uses an anonymous account named `PYUNTO_AGENT_N
 If you only want to run the agent, not work on it — one line, no clone:
 
 ```bash
-pip install 'pyunto-agent[qr] @ git+https://github.com/utagoeinc/pyunto-agent'
+pip install 'pyunto-agent[qr]'
 pyunto-agent pair --operator "your name"
 ```
 
-Neither package is on PyPI yet, which is why the install comes from git.
+To run the latest unreleased code instead:
+
+```bash
+pip install 'pyunto-agent[qr] @ git+https://github.com/utagoeinc/pyunto-agent'
+```
 
 ### Longer guides
 
