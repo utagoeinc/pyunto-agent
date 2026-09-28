@@ -5,13 +5,20 @@ description = "Make an external agent (Claude, Claude Code, any CLI/HTTP agent) 
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 authors = [{ name = "Utagoe Inc." }]
-keywords = ["pyunto", "diary", "agent", "e2ee", "mcp"]
+keywords = ["pyunto", "diary", "agent", "ai-agent", "e2ee", "mcp", "mcp-server", "claude", "llm", "robotics"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Communications :: Chat",
     "Topic :: Security :: Cryptography",
 ]
@@ -29,14 +36,17 @@ dev = ["pytest>=8.0"]
 qr = ["qrcode>=7.4"]
 
 [project.urls]
-Homepage = "https://github.com/utagoeinc/pyunto-agent"
+Homepage = "https://pyunto.com"
 Repository = "https://github.com/utagoeinc/pyunto-agent"
+Issues = "https://github.com/utagoeinc/pyunto-agent/issues"
+Documentation = "https://github.com/utagoeinc/pyunto-agent/blob/main/GUIDE.md"
 
 [project.scripts]
 pyunto-agent = "pyunto_agent.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+# 77+: PEP 639 SPDX `license` string and `license-files`.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

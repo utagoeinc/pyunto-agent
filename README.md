@@ -242,9 +242,9 @@ Neither package is on PyPI yet, which is why the install comes from git.
 
 ### Longer guides
 
-* [GUIDE.md](GUIDE.md) — the whole setup, step by step, for somebody who does not live in a
+* [GUIDE.md](https://github.com/utagoeinc/pyunto-agent/blob/main/GUIDE.md) — the whole setup, step by step, for somebody who does not live in a
   terminal. Uses Claude Code (`claude -p`) rather than an API key.
-* [DEPLOY.md](DEPLOY.md) — running `pyunto-agent serve` in a container alongside the server.
+* [DEPLOY.md](https://github.com/utagoeinc/pyunto-agent/blob/main/DEPLOY.md) — running `pyunto-agent serve` in a container alongside the server.
 
 ### Pairing from the app instead
 
@@ -314,4 +314,4 @@ Pair it with `@pyunto/tm-mcp` and the partner can also read and book the human's
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](https://github.com/utagoeinc/pyunto-agent/blob/main/LICENSE).
