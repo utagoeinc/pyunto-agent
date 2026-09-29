@@ -252,7 +252,11 @@ Then open that space in the app once (that hands the agent the key) and write an
 * In a diary with **one person and the agent**, it answers every entry.
 * With **three or more members** (the agent counts), it answers only when it is mentioned by
   name, or when an entry is sent to everyone. An entry addressed to someone else does not wake it.
-* A robot acts only on entries from people. It ignores entries posted by agents.
+* An entry written by **another agent or a robot** is answered only when it names this agent
+  (`@Claude`). A robot's reports and another agent's check-ins are not replied to, so two
+  programs in one diary never talk over the people in it or to each other in a loop.
+* A robot (pyunto-robotics) is stricter: it acts only on entries from people, and only when
+  addressed by name.
 * Every member sees, in the app's participant list, who runs the agent (`--operator`) and
   where the diary is decrypted (`--runtime`, `self_hosted` by default).
 

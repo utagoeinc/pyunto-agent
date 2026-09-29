@@ -160,3 +160,35 @@ def test_robot_in_group_stays_out_of_quiet_entries():
 def test_robot_in_group_answers_when_sent_to_everyone():
     b = make_bridge(members=3, display_name=ROBOT_NAME)
     assert b._should_reply(entry("well done all")) is True
+
+
+# -- entries written by another program ------------------------------------------------
+
+def from_program(text: str, *, notify=None) -> IncomingMessage:
+    m = entry(text, notify=notify)
+    m.sender_uuid = "eeeeeeee-0000-0000-0000-000000000000"
+    m.sender_name = "🤖 S1"
+    m.sender_is_agent = True
+    return m
+
+
+def test_a_robots_reply_to_the_room_is_not_answered():
+    # "I did not understand ..." posted to everyone: answering it talks over the people.
+    b = make_bridge(members=3)
+    assert b._should_reply(from_program("I did not understand that.")) is False
+
+
+def test_another_program_is_ignored_even_in_a_small_space():
+    b = make_bridge(members=2)
+    assert b._should_reply(from_program("status: charging")) is False
+
+
+def test_another_program_that_names_the_agent_is_answered():
+    b = make_bridge(members=3)
+    assert b._should_reply(from_program("@Claude what does the forecast say?")) is True
+
+
+def test_being_in_notify_is_not_enough_for_a_program():
+    # A program listing everyone in notify_users has not chosen this agent.
+    b = make_bridge(members=3)
+    assert b._should_reply(from_program("done", notify=[AGENT, ALICE])) is False

@@ -147,6 +147,8 @@ class Bridge:
         In a one-on-one diary -- one person and the agent, i.e. two members in total --
         everything written is addressed to the agent by definition, so it answers freely.
 
+        An entry from another agent or robot is answered only when it names this agent.
+
         From three members up, mentions decide the audience. Two people plus the agent
         already counts as a group: people are mostly writing to each other, and an agent
         that answers everything talks over them. There it speaks only when:
@@ -191,6 +193,21 @@ class Bridge:
                          m.sender_name)
                 return False
             return True
+
+        # -- another program wrote this -----------------------------------------------------
+        #
+        # A text agent answers another agent or a robot only when it is called by name. A
+        # robot's short replies ("I did not understand that", "I am busy") and another
+        # agent's check-ins are written to the room, and answering them talks over the
+        # people in it; with two text agents it would also be a conversation with no one in
+        # it. Being named is the exception: a program asking this agent something directly
+        # is a real request. (A robot never gets this far: it takes orders only from people.)
+        if m.sender_is_agent:
+            if self._is_mentioned_by_name(m.text):
+                return True
+            log.info("ignoring entry from %s: another program, and not addressed by name",
+                     m.sender_name)
+            return False
 
         if self._member_count(m.chat_space_id) <= 2:
             return True
