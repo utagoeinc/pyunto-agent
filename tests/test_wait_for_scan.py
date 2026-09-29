@@ -70,3 +70,34 @@ def test_a_server_hiccup_does_not_end_the_wait():
             return [space("eventually")]
 
     assert wait_for_scan(Flaky(), timeout=5.0, poll=0.01) == "eventually"
+
+
+# -- at a terminal, an account already in a diary asks instead of assuming ------------------
+
+def test_at_a_terminal_it_waits_for_the_scan_into_another_diary(capsys):
+    """The reported fault: it answered "paired" before the scan, so the diary the person
+    then chose was never listened to."""
+    client = Client([space("old")], [space("old")], [space("old"), space("new")])
+    found = wait_for_scan(client, timeout=5.0, poll=0.01, interactive=True,
+                          wait_for_enter=lambda s: False)
+    assert found == "new"
+    assert "press Enter" in capsys.readouterr().out
+
+
+def test_at_a_terminal_enter_keeps_the_diary_it_is_in():
+    """Re-approving the same diary changes nothing visible, so Enter is how to say so."""
+    client = Client([space("old")])
+    assert wait_for_scan(client, timeout=5.0, poll=0.01, interactive=True,
+                         wait_for_enter=lambda s: True) == "old"
+
+
+def test_at_a_terminal_a_timeout_keeps_the_existing_diary():
+    client = Client([space("old")])
+    assert wait_for_scan(client, timeout=0.1, poll=0.02, interactive=True,
+                         wait_for_enter=lambda s: False) == "old"
+
+
+def test_the_most_recently_active_diary_is_the_default():
+    """Server order, not uuid order: the diary in use now, not an old test space."""
+    client = Client([space("zz-recent"), space("aa-old")])
+    assert wait_for_scan(client, timeout=1.0, poll=0.01, interactive=False) == "zz-recent"

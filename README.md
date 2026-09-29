@@ -262,6 +262,9 @@ Then open that space in the app once (that hands the agent the key) and write an
 
 ### Details
 
+If the agent is already in a diary, `pair` says so and waits: scan the code to add it to
+another diary, or press Enter to keep the one it is in.
+
 Add `--no-run` to draw the QR code and exit, if you would rather start it yourself later with
 `pyunto-agent run`. The QR code holds no secret: it names the account asking, and the decision
 stays with whoever holds the phone.

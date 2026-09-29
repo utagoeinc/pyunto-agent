@@ -106,48 +106,94 @@ def render_qr(text: str, big: bool = False) -> str | None:
     return "\n".join(lines)
 
 
-def wait_for_scan(client, timeout: float = 600.0, poll: float = 2.0):  # noqa: ANN001
-    """Block until this account is in a shared space, and return it.
+def wait_for_scan(  # noqa: ANN201
+    client,  # noqa: ANN001
+    timeout: float = 600.0,
+    poll: float = 2.0,
+    interactive: bool | None = None,
+    wait_for_enter=None,  # noqa: ANN001
+):
+    """Block until the QR code is scanned, and return the space it was scanned into.
 
     Printing a QR code and exiting makes the person run a second command, and -- worse --
-    gives them no way to tell whether the scan worked. The QR code just sits there. So the
-    code that drew it waits for the answer, and the caller carries straight on.
+    gives them no way to tell whether the scan worked. So the code that drew it waits for the
+    answer, and the caller carries straight on. Returns a space id, or None if nobody scanned
+    in time.
 
-    Returns a space id, or None if nobody scanned in time.
+    An account that is ALREADY in a diary is the hard case, and both simple answers are wrong:
 
-    It returns a space it was ALREADY in, immediately, rather than waiting for a new one to
-    appear. That is not a shortcut: a robot re-paired into the same space -- which is what
-    happens every time somebody runs this twice -- joins nothing new, so waiting for a change
-    waits forever. The QR code was scanned, the app said yes, and the terminal sat there
-    saying "waiting for the scan…". Being already paired is success, not a reason to block.
+    * Returning that diary at once (the old behaviour) answers before anyone has scanned. The
+      person then scans the code into a *different* diary, and the program is already
+      listening to the old one -- it looks connected and ignores everything they write there.
+    * Waiting only for a new diary hangs when they re-approve the same one, because joining a
+      diary you are in changes nothing the program can see.
+
+    So at a terminal it asks: scan to add another diary, or press Enter to keep the one it is
+    in. Without a terminal (a service, a test) nobody can press Enter, so it keeps the old
+    behaviour and returns the existing diary at once.
 
     Polls rather than subscribes because membership is granted server-side and there is no
     event for it; the interval is slow enough to be invisible in a log and fast enough to
     feel immediate.
     """
+    import sys
     import time
 
-    def shared_spaces() -> set[str]:
+    def shared_spaces() -> list[dict]:
         try:
-            return {
-                str(s.get("uuid"))
-                for s in client.list_spaces()
-                if not (s.get("is_self") or s.get("isSelf"))
-            }
+            return [s for s in client.list_spaces() if not (s.get("is_self") or s.get("isSelf"))]
         except Exception:  # noqa: BLE001 - a hiccup while polling is not a failure to pair
-            return set()
+            return []
 
+    # Server order: the diary with the most recent activity first.
     before = shared_spaces()
+    before_ids = {str(s.get("uuid")) for s in before}
+    if interactive is None:
+        interactive = bool(getattr(sys.stdin, "isatty", lambda: False)())
+    if before and not interactive:
+        return str(before[0].get("uuid"))
     if before:
-        return sorted(before)[0]
+        current = before[0].get("name") or str(before[0].get("uuid"))
+        others = len(before) - 1
+        also = f" (and {others} other diar{'y' if others == 1 else 'ies'})" if others else ""
+        print(f'Already in "{current}"{also}. Scan the code to add it to another diary,')
+        print(f'or press Enter to keep using "{current}".')
+    wait = wait_for_enter or _wait_for_enter
 
     deadline = time.time() + timeout
     while time.time() < deadline:
-        time.sleep(poll)
-        new = shared_spaces() - before
+        if before:
+            if wait(poll):
+                return str(before[0].get("uuid"))
+        else:
+            time.sleep(poll)
+        new = [s for s in shared_spaces() if str(s.get("uuid")) not in before_ids]
         if new:
-            return sorted(new)[0]
-    return None
+            return str(new[0].get("uuid"))
+    return str(before[0].get("uuid")) if before else None
+
+
+def _wait_for_enter(seconds: float) -> bool:
+    """Wait up to `seconds` for Enter on the terminal. True if it was pressed."""
+    import sys
+
+    if sys.platform == "win32":
+        import msvcrt  # noqa: PLC0415
+        import time  # noqa: PLC0415
+
+        end = time.time() + seconds
+        while time.time() < end:
+            if msvcrt.kbhit() and msvcrt.getwch() in ("\r", "\n"):
+                return True
+            time.sleep(0.05)
+        return False
+    import select  # noqa: PLC0415
+
+    ready, _, _ = select.select([sys.stdin], [], [], seconds)
+    if ready:
+        sys.stdin.readline()
+        return True
+    return False
 
 
 def save_qr(text: str, path: str | Path) -> Path:
