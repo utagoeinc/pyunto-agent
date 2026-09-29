@@ -7,7 +7,7 @@ server is unchanged and never sees plaintext; decryption happens in this process
 [**Pyunto for iPhone and iPad**](https://apps.apple.com/app/id6755097890) ·
 [**Pyunto for Android**](https://play.google.com/store/apps/details?id=com.pyunto.app) ·
 [**pyunto-robotics**](https://github.com/utagoeinc/pyunto-robotics) — the same idea, with a
-robot at the other end
+robot at the other end ([watch it, 100 s](https://pyunto.com/media/solar-demo.mp4))
 
 ---
 
