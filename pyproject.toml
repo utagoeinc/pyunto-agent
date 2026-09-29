@@ -1,6 +1,6 @@
 [project]
 name = "pyunto-agent"
-version = "0.1.6"
+version = "0.2.0"
 description = "Make an external agent (Claude, Claude Code, any CLI/HTTP agent) the partner of a Pyunto exchange diary"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -34,6 +34,10 @@ dev = ["pytest>=8.0"]
 # Terminal QR for agent-initiated pairing. Optional: a headless agent in CI never shows one,
 # and a hard requirement would make every install pay for a path most runs do not take.
 qr = ["qrcode>=7.4"]
+# Reading attached documents for models that cannot open them directly: Word, Excel,
+# PowerPoint and PDF text, and Pillow to convert HEIC / oversized photos. Plain text, images,
+# PDFs sent to the Claude API, and anything Claude Code opens itself need none of these.
+docs = ["python-docx>=1.1", "openpyxl>=3.1", "python-pptx>=1.0", "pypdf>=4.0", "pillow>=10.0"]
 
 [project.urls]
 Homepage = "https://pyunto.com"

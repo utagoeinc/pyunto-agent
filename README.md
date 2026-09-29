@@ -308,6 +308,31 @@ If someone else set the agent up for you, go the other way:
 3. Open the space once in the app, so the space key is shared with the agent's identity key.
 4. `pyunto-agent whoami` should now show `key=yes` for that space.
 
+## Photos, videos and documents
+
+The agent reads what people attach, not only what they type. Each photo, video or document is
+downloaded, decrypted on your machine into `~/.pyunto-agent/attachments/`, and shown to the
+model:
+
+| Attached | Claude API (`claude-api`) | Claude Code (`command`) | `http` |
+|---|---|---|---|
+| Photo | the image itself | the file path; Claude Code opens it | path + `data_base64` |
+| Video | 4 evenly spaced frames (needs `ffmpeg`) | the file and its frames | path + `data_base64` |
+| PDF | the PDF itself | the file path | path + `data_base64` |
+| Text, Markdown, CSV | its text | the file path | path + `data_base64` |
+| Word, Excel, PowerPoint | its text (`pip install 'pyunto-agent[docs]'`) | the file path | path + `data_base64` |
+
+So "can you check the grammar in this?" with a document attached, or "what do you think of the
+garden?" with three photos, works as you would expect. A few details:
+
+* A caption is its own entry right after the photo. The agent waits a few seconds after a photo
+  and answers the photo and its caption together, once.
+* Only the newest four attachments in a thread are shown to the model on each reply.
+* With Claude Code, the attachment folder is passed with `--add-dir` automatically, so it may
+  open the files.
+* Whatever the model is shown is sent to that model's provider, as with text. Say so to the
+  people in the diary.
+
 ## Agent: Claude API replies
 
 ```bash

@@ -11,15 +11,19 @@ turn text into text can be a diary partner:
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
 import shlex
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
 
 import requests
+
+from .media import Attachment, document_text, video_frames
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +34,12 @@ class Turn:
     name: str
     text: str
     at: str = ""  # ISO timestamp if known
+    #: Photos, videos and documents on this entry, already downloaded (see media.py).
+    attachments: list[Attachment] = field(default_factory=list)
+
+    def as_json(self) -> dict:
+        return {"role": self.role, "name": self.name, "text": self.text, "at": self.at,
+                "attachments": [a.as_json() for a in self.attachments]}
 
 
 @dataclass
@@ -54,7 +64,7 @@ class Context:
             "space": self.space_name,
             "thread_id": self.thread_id,
             "persona": self.persona,
-            "turns": [t.__dict__ for t in self.turns],
+            "turns": [t.as_json() for t in self.turns],
             "extra": self.extra,
         }
 
@@ -100,15 +110,19 @@ class ClaudeAPIBackend:
         self.base_url = base_url.rstrip("/")
 
     def reply(self, ctx: Context) -> str | None:
-        messages = []
+        messages: list[dict] = []
         for t in ctx.turns:
             role = "assistant" if t.role == "assistant" else "user"
-            content = t.text if role == "assistant" else f"[{t.name}] {t.text}"
+            text = t.text if role == "assistant" else f"[{t.name}] {t.text}"
+            blocks = [{"type": "text", "text": text}]
+            if role == "user":
+                for att in t.attachments:
+                    blocks.extend(attachment_blocks(att))
             # The API requires alternating roles; merge consecutive same-role turns.
             if messages and messages[-1]["role"] == role:
-                messages[-1]["content"] += "\n" + content
+                messages[-1]["content"].extend(blocks)
             else:
-                messages.append({"role": role, "content": content})
+                messages.append({"role": role, "content": blocks})
         if not messages or messages[-1]["role"] != "user":
             return None
         body = {
@@ -135,6 +149,57 @@ class ClaudeAPIBackend:
         return text or None
 
 
+# -- attachments -----------------------------------------------------------------------------
+
+#: The Messages API takes images up to 5 MB each and PDFs up to 32 MB.
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024
+_MAX_PDF_BYTES = 32 * 1024 * 1024
+_API_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+def _b64(path: Path) -> str:
+    return base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def _image_block(path: Path, mime: str) -> dict | None:
+    if mime in _API_IMAGE_TYPES and path.stat().st_size <= _MAX_IMAGE_BYTES:
+        return {"type": "image", "source": {"type": "base64", "media_type": mime, "data": _b64(path)}}
+    try:  # HEIC, or too large: re-encode as a JPEG if Pillow is available
+        from PIL import Image  # noqa: PLC0415
+
+        img = Image.open(path)
+        img.thumbnail((2048, 2048))
+        out = path.with_name(path.stem + "_api.jpg")
+        img.convert("RGB").save(out, "JPEG", quality=85)
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                            "data": _b64(out)}}
+    except Exception as e:  # noqa: BLE001
+        log.warning("cannot pass %s to the model: %s", path.name, e)
+        return None
+
+
+def attachment_blocks(att: Attachment) -> list[dict]:
+    """Content blocks that show a model what was attached, or say plainly that it cannot."""
+    if att.path is None or not att.path.exists():
+        return [{"type": "text", "text": f"[{att.label} attached, but it could not be opened]"}]
+    if att.kind == "image":
+        block = _image_block(att.path, att.mime)
+        return [block] if block else [{"type": "text", "text": "[a photo that could not be read]"}]
+    if att.kind == "video":
+        frames = [b for f in video_frames(att.path) if (b := _image_block(f, "image/jpeg"))]
+        if not frames:
+            return [{"type": "text", "text": "[a video; frames could not be extracted (install ffmpeg)]"}]
+        return [{"type": "text", "text": f"[a video; {len(frames)} evenly spaced frames follow]"}, *frames]
+    name = att.name or att.path.name
+    if att.path.suffix.lower() == ".pdf" and att.path.stat().st_size <= _MAX_PDF_BYTES:
+        return [{"type": "document", "title": name,
+                 "source": {"type": "base64", "media_type": "application/pdf", "data": _b64(att.path)}}]
+    text = document_text(att.path, att.mime)
+    if text is None:
+        return [{"type": "text", "text": f"[attached document {name!r}; its format cannot be read here]"}]
+    return [{"type": "text", "text": f"[attached document {name!r}]\n{text}"}]
+
+
 class CommandBackend:
     """Run a command per message. stdin: JSON context. stdout: JSON {"reply": ...} or text.
 
@@ -153,6 +218,12 @@ class CommandBackend:
     def reply(self, ctx: Context) -> str | None:
         prompt = self._prompt(ctx)
         argv = shlex.split(self.command)
+        dirs = sorted({str(a.path.parent) for t in ctx.turns for a in t.attachments if a.path})
+        if dirs and Path(argv[0]).name.startswith("claude") and "--add-dir" not in argv:
+            # Claude Code reads files only inside its allowed folders; the attachments live in
+            # the agent's own data folder, so name it. Verified with `claude -p` on an image.
+            for d in dirs:
+                argv += ["--add-dir", d]
         if any("{prompt}" in a for a in argv):
             argv = [a.replace("{prompt}", prompt) for a in argv]
             stdin = None
@@ -174,15 +245,40 @@ class CommandBackend:
     @staticmethod
     def _prompt(ctx: Context) -> str:
         lines = [ctx.persona or DEFAULT_PERSONA, "", f"Diary space: {ctx.space_name}", ""]
+        attached = False
         for t in ctx.turns:
             who = "You" if t.role == "assistant" else t.name
             lines.append(f"{who}: {t.text}")
+            for a in t.attachments:
+                if a.path is None:
+                    lines.append(f"  ({a.label} attached, but it could not be opened)")
+                    continue
+                attached = True
+                lines.append(f"  (attached {a.label}: {a.path})")
+                if a.kind == "video":
+                    for f in video_frames(a.path):
+                        lines.append(f"  (frame from that video: {f})")
+        if attached:
+            lines += ["", "Open the attached files listed above before replying; they are "
+                          "part of what the writer shared."]
         lines += ["", "Write only your next diary reply."]
         return "\n".join(lines)
 
 
 class HTTPBackend:
+    """POST the context as JSON. Attachments carry their local path and, up to 8 MB each,
+    their bytes as ``data_base64`` -- the service may run on another machine."""
+
     name = "http"
+    max_inline_bytes = 8 * 1024 * 1024
+
+    def _body(self, ctx: Context) -> dict:
+        body = ctx.as_json()
+        for turn, src in zip(body["turns"], ctx.turns):
+            for item, att in zip(turn["attachments"], src.attachments):
+                if att.path and att.path.exists() and att.path.stat().st_size <= self.max_inline_bytes:
+                    item["data_base64"] = _b64(att.path)
+        return body
 
     def __init__(self, url: str, headers: dict | None = None, timeout: float = 120.0):
         self.url = url
@@ -191,7 +287,7 @@ class HTTPBackend:
 
     def reply(self, ctx: Context) -> str | None:
         try:
-            r = requests.post(self.url, json=ctx.as_json(), headers=self.headers, timeout=self.timeout)
+            r = requests.post(self.url, json=self._body(ctx), headers=self.headers, timeout=self.timeout)
         except requests.RequestException as e:
             log.error("http backend failed: %s", e)
             return None

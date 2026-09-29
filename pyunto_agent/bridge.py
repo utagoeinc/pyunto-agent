@@ -258,7 +258,9 @@ class Bridge:
             return
         self._seen[m.thread_id].append(m.uuid)
         # Not decryptable yet (no key shared for this space) or a reaction: nothing to answer.
-        if not m.text or m.text == ENCRYPTED_PLACEHOLDER or is_reaction(m.text):
+        # A photo, video or document with no words is still something to answer.
+        if (not m.text and m.attachment is None) or m.text == ENCRYPTED_PLACEHOLDER \
+                or is_reaction(m.text):
             log.info("skipping entry from %s (undecryptable or reaction)", m.sender_name)
             return
         if not self._should_reply(m):
@@ -316,11 +318,24 @@ class Bridge:
 
     # -- one message ----------------------------------------------------------------
 
+    #: Seconds to wait after a photo, video or document before answering it. The apps post the
+    #: caption as a separate entry right after the media (and several photos one by one), so
+    #: answering at once would reply to the picture and then again to its caption.
+    media_wait: float = 6.0
+    #: How many of the most recent attachments in the thread are shown to the model.
+    max_attachments: int = 4
+
     def handle(self, m: IncomingMessage) -> str | None:
         if not self._rate_ok():
             log.warning("rate limit reached; skipping reply")
             return None
-        log.info("<- [%s] %s", m.sender_name, m.text[:120])
+        if m.attachment is not None and not m.text:
+            time.sleep(self.media_wait)
+            if self._followed_by_same_writer(m):
+                log.info("<- [%s] %s; a later entry follows, answering that instead",
+                         m.sender_name, m.attachment.label)
+                return None
+        log.info("<- [%s] %s", m.sender_name, m.text[:120] or f"({m.attachment.label})")
         ctx = self.build_context(m)
         reply = self.backend.reply(ctx)
         if not reply:
@@ -345,6 +360,25 @@ class Bridge:
         log.info("-> %s", reply[:120])
         return reply
 
+    def _followed_by_same_writer(self, m: IncomingMessage) -> bool:
+        """True when the same person wrote again in this thread after `m` (a caption, or
+        another photo). That later entry is answered instead, with `m` in its context."""
+        try:
+            history = self.client.get_messages(m.thread_id, m.chat_space_id)
+        except Exception:  # noqa: BLE001
+            return False
+        ids = [h.uuid for h in history]
+        if m.uuid not in ids:
+            return False
+        later = history[ids.index(m.uuid) + 1:]
+        return any(h.sender_uuid.lower() == m.sender_uuid.lower() for h in later)
+
+    def _download(self, att) -> None:  # noqa: ANN001
+        try:
+            self.client.download_attachment(att)
+        except Exception as e:  # noqa: BLE001 - an unreadable photo must not stop the reply
+            log.warning("could not download %s: %s", att.label, e)
+
     def build_context(self, m: IncomingMessage) -> Context:
         me = self.client.uuid
         turns: list[Turn] = []
@@ -353,10 +387,21 @@ class Bridge:
         except Exception:  # noqa: BLE001
             log.exception("could not load thread history; replying to the single entry")
             history = [m]
-        for h in history[-self.history :]:
+        recent = history[-self.history :]
+        # Only the newest few attachments from people are downloaded and shown: a model reading
+        # every photo of a long thread on every reply would be slow and expensive.
+        newest = [h.uuid for h in reversed(recent)
+                  if h.attachment is not None and h.sender_uuid.lower() != me][: self.max_attachments]
+        for h in recent:
             text = h.text or ""
             if is_marker(text):
                 text = marker_preview(text) or text
+            attachments = []
+            if h.attachment is not None:
+                if h.uuid in newest:
+                    self._download(h.attachment)
+                    attachments = [h.attachment]
+                text = text or f"({h.attachment.label})"
             if not text.strip():
                 continue
             turns.append(
@@ -365,11 +410,19 @@ class Bridge:
                     name=h.sender_name or "them",
                     text=text,
                     at=str((h.raw or {}).get("created_at") or ""),
+                    attachments=attachments,
                 )
             )
         # Make sure the triggering entry is the last user turn even if history lagged.
-        if not turns or turns[-1].text != (marker_preview(m.text) or m.text):
-            turns.append(Turn(role="user", name=m.sender_name or "them", text=marker_preview(m.text) or m.text))
+        trigger_text = marker_preview(m.text) or m.text or (
+            f"({m.attachment.label})" if m.attachment else "")
+        if not turns or turns[-1].text != trigger_text:
+            attachments = []
+            if m.attachment is not None:
+                self._download(m.attachment)
+                attachments = [m.attachment]
+            turns.append(Turn(role="user", name=m.sender_name or "them", text=trigger_text,
+                              attachments=attachments))
         space_name = self._space_names.get(m.chat_space_id.lower())
         if space_name is None:
             self.refresh_spaces()

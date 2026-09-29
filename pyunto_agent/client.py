@@ -18,10 +18,12 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -40,6 +42,15 @@ from .crypto import (
     parse_encrypted_content,
 )
 from .keys import SpaceKeyProvider  # noqa: F401
+from .media import (
+    Attachment,
+    attachment_from_message,
+    decrypt_blob,
+    file_info,
+    parse_metadata,
+    sniff_image,
+    suffix_for,
+)
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +82,10 @@ class IncomingMessage:
     #: what a robot must know before it moves anything. Absent on very old servers -> False,
     #: so callers that need the guarantee should fail closed themselves.
     sender_is_agent: bool = False
+    #: "text", "image", "video" or "file".
+    message_type: str = "text"
+    #: The photo, video or document on this entry (not yet downloaded), or None.
+    attachment: Attachment | None = None
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     def __str__(self) -> str:
@@ -85,10 +100,16 @@ class PyuntoClient:
         session: Session,
         key_provider: SpaceKeyProvider,
         timeout: float = 20.0,
+        attachment_dir: Path | None = None,
     ):
         self.session = session
         self.keys = key_provider
         self.timeout = timeout
+        #: Where downloaded (decrypted) photos, videos and documents are kept. Backends read
+        #: them from here; Claude Code is given this folder with --add-dir.
+        self.attachment_dir = attachment_dir or (
+            Path(os.environ.get("PYUNTO_AGENT_DIR") or Path.home() / ".pyunto-agent") / "attachments"
+        )
         self._sio: socketio.Client | None = None
         self._on_message: Callable[[IncomingMessage], None] | None = None
         self._stop = threading.Event()
@@ -237,6 +258,39 @@ class PyuntoClient:
             resp.raise_for_status()
         return resp.json()
 
+    def download_attachment(self, att: Attachment) -> Path:
+        """Download a photo, video or document, decrypt it here, and return its local path.
+
+        Kept under `attachment_dir` by message id, so a thread's history does not download the
+        same photo on every reply.
+        """
+        endpoint = {"image": "images", "video": "videos", "file": "files"}[att.kind]
+        key = self.keys.get_key(att.chat_space_id)
+        if att.kind == "file" and not att.name:
+            info = file_info(att.metadata, key)
+            att.name = str(info.get("name") or "")
+            att.mime = str(info.get("mime") or att.mime)
+            att.size = int(info.get("size") or 0)
+        self.attachment_dir.mkdir(parents=True, exist_ok=True)
+        cached = [p for p in self.attachment_dir.glob(f"{att.message_uuid}.*")]
+        if cached:
+            target = cached[0]
+        else:
+            r = self._request("GET", f"/api/{endpoint}/download/{att.message_uuid}", timeout=300)
+            r.raise_for_status()
+            data = decrypt_blob(r.content, key)
+            suffix = suffix_for(att)
+            if att.kind == "image" and (sniffed := sniff_image(data)):
+                att.mime, suffix = sniffed
+            target = self.attachment_dir / f"{att.message_uuid}{suffix}"
+            target.write_bytes(data)
+        if att.kind == "image" and (sniffed := sniff_image(target.read_bytes()[:16])):
+            att.mime = sniffed[0]
+        att.path = target
+        if not att.size:
+            att.size = target.stat().st_size
+        return target
+
     def leave_space(self, chat_space_id: str) -> None:
         """Leave a space (POST /api/chat-spaces/:uuid/leave)."""
         r = self._request("POST", f"/api/chat-spaces/{chat_space_id}/leave")
@@ -322,6 +376,7 @@ class PyuntoClient:
         recovered from encryption_metadata (which carries it uppercased) or supplied by the caller.
         """
         sender = m.get("sender") or m.get("User") or {}
+        media_meta = parse_metadata(m.get("encrypted_metadata"))
         meta = m.get("encryption_metadata")
         if isinstance(meta, str):
             try:
@@ -333,6 +388,7 @@ class PyuntoClient:
         space_id = (
             m.get("chat_space_id")
             or (meta or {}).get("chat_space_id")
+            or media_meta.get("chat_space_id")
             or chat_space_id
             or ""
         )
@@ -341,14 +397,17 @@ class PyuntoClient:
         text = self._decrypt(
             space_id, m.get("encrypted_content"), m.get("encryption_metadata"), m.get("content", "")
         )
+        message_type = m.get("message_type") or "text"
         return IncomingMessage(
             uuid=m.get("uuid", ""),
-            text=text,
+            text="" if message_type in ("image", "video", "file") else text,
             thread_id=m.get("chat_thread_id", ""),
             chat_space_id=space_id,
             sender_uuid=str(sender.get("uuid", "")).lower(),
             sender_name=sender.get("display_name", "?"),
             sender_is_agent=bool(sender.get("is_agent")),
+            message_type=message_type,
+            attachment=attachment_from_message(message_type, m.get("uuid", ""), space_id, media_meta),
             raw=m,
         )
 
@@ -365,9 +424,13 @@ class PyuntoClient:
             data.get("content", ""),
         )
         notify = data.get("notifyUsers")
+        message_type = data.get("messageType") or "text"
+        media = message_type in ("image", "video", "file")
         return IncomingMessage(
             uuid=data.get("uuid", ""),
-            text=text,
+            # The server puts "[Image]" / "[Video]" / "[File]" in content; that is a label for
+            # the apps, not something the person wrote.
+            text="" if media else text,
             thread_id=data.get("threadId") or data.get("chatThreadId") or "",
             chat_space_id=space_id,
             sender_uuid=str(sender.get("uuid", "")).lower(),
@@ -376,6 +439,10 @@ class PyuntoClient:
             mentioned_uuids=[str(u).lower() for u in (data.get("mentionedUsers") or [])],
             notify_uuids=[str(u).lower() for u in notify] if isinstance(notify, list) else None,
             silent=bool(data.get("silent")),
+            message_type=message_type,
+            attachment=attachment_from_message(
+                message_type, data.get("uuid", ""), space_id,
+                parse_metadata(data.get("encryptedMetadata"))) if media else None,
             raw=data,
         )
 
@@ -415,7 +482,7 @@ class PyuntoClient:
             # The server echoes our own posts back to us. Without this the robot loops forever.
             if msg.sender_uuid == me:
                 return
-            if not msg.text.strip():
+            if not msg.text.strip() and msg.attachment is None:
                 return
             log.info("<- %s (%s)", msg, event)
             if self._on_message:
