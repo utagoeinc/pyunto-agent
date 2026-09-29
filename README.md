@@ -9,6 +9,12 @@ server is unchanged and never sees plaintext; decryption happens in this process
 [**pyunto-robotics**](https://github.com/utagoeinc/pyunto-robotics) — the same idea, with a
 robot at the other end ([watch it, 100 s](https://pyunto.com/media/solar-demo.mp4))
 
+<a href="https://pyunto.com/media/coach-demo.mp4"><img src="https://raw.githubusercontent.com/utagoeinc/pyunto-agent/main/docs/images/coach-demo.gif" alt="Left: a Pyunto diary on an iPhone where a client logs bench-press sessions. Right: pyunto-agent running on a Mac with a strength-coach persona, receiving each entry and replying; its second reply compares today's 82.5 kg with yesterday's 80 kg." width="800"></a>
+
+*A real run with Claude Code as the model: a strength-coach persona in a Markdown file, and a
+client logging sessions from their phone. The second reply compares with the day before.
+[Watch the full 90-second video](https://pyunto.com/media/coach-demo.mp4).*
+
 ---
 
 ## Two kinds of agent
