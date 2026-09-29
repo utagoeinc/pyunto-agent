@@ -151,10 +151,25 @@ Building a real service, from nothing to a client's phone.
 
 ### 1. Install
 
+Python 3.11 or newer. Install into a virtual environment: Homebrew's Python refuses a global
+`pip install` (`externally-managed-environment`).
+
 ```bash
+python3.12 -m venv ~/pyunto-env
+source ~/pyunto-env/bin/activate
 pip install 'pyunto-agent[qr]'
-export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+Then choose where replies come from:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...    # the Claude API (used below), or
+claude --version                       # Claude Code, if installed: no API key needed
+```
+
+With Claude Code, replace `--backend claude-api` below with
+`--backend command --command 'claude -p --output-format json'`. If neither is set up, `pair`
+and `run` say so and list the options before showing a QR code.
 
 ### 2. Write the trainer
 
@@ -201,6 +216,14 @@ Use `.svg` instead of `.png` for print, or when Pillow is not installed.
 pyunto-agent run --backend claude-api --persona trainer.md
 ```
 
+It starts by naming every diary it answers in, so you can see which ones you were let into:
+
+```
+Answering in 2 diaries:
+  Sano Fitness - Aiko  [2 members, answers every entry]  1552f3dc
+  Sano Fitness - Ken   [2 members, answers every entry]  3124f1b8  (cannot read it yet: open this space in the Pyunto app once)
+```
+
 One process serves every client who has scanned the code. A client writes:
 
 > Bench 80kg 5x5, felt heavy on the last set
@@ -217,8 +240,21 @@ Skip the persona and pair without an image — the QR code appears in the termin
 agent starts answering as soon as you scan it:
 
 ```bash
-pyunto-agent pair --operator "your name"
+pyunto-agent pair --operator "your name"                       # with ANTHROPIC_API_KEY set
+pyunto-agent pair --operator "your name" \
+  --backend command --command 'claude -p --output-format json'  # or with Claude Code
 ```
+
+Then open that space in the app once (that hands the agent the key) and write an entry.
+
+### Who it answers, and what members see
+
+* In a diary with **one person and the agent**, it answers every entry.
+* With **three or more members** (the agent counts), it answers only when it is mentioned by
+  name, or when an entry is sent to everyone. An entry addressed to someone else does not wake it.
+* A robot acts only on entries from people. It ignores entries posted by agents.
+* Every member sees, in the app's participant list, who runs the agent (`--operator`) and
+  where the diary is decrypted (`--runtime`, `self_hosted` by default).
 
 ### Details
 
@@ -307,14 +343,47 @@ Call it before writing anything sensitive — it tells you who reads what you po
 
 Pair it with `@pyunto/tm-mcp` and the partner can also read and book the human's schedule.
 
+## Reference
+
+| Command | What it does | Options |
+|---|---|---|
+| `pair` | Shows a QR code; the person who scans it lets the agent into a diary. Then answers entries | `--operator NAME` (shown to every member), `--runtime self_hosted\|hosted\|endpoint`, `--image FILE.png\|.svg` (write the code to a file and exit), `--big` (larger terminal QR), `--no-run` (exit after pairing), plus the `run` options |
+| `run` | Answers entries in every diary the agent is in | `--backend claude-api\|command\|http`, `--command CMD`, `--url URL`, `--model ID`, `--persona FILE.md`, `--space ID` (repeatable; only these diaries), `--history N` (entries of context, default 12), `--silent` (post without a notification), `--dry-run` (log replies, do not post) |
+| `mcp` | MCP server over stdio for Claude Code / Claude Desktop | |
+| `whoami` | The agent's account, and each space with `key=yes/no` | |
+| `join LINK` | Join through an invite link made in the app | |
+| `send SPACE_ID TEXT` | Post one entry | `--thread ID`, `--silent` |
+| `serve` | HTTP service for running agents on behalf of others (see DEPLOY.md) | `--listen HOST:PORT` (default `127.0.0.1:8788`), plus the `run` options |
+
+Backends: `claude-api` needs `ANTHROPIC_API_KEY`. `command` runs any program with the prompt as
+JSON on stdin and uses its stdout as the reply (`claude -p --output-format json` is Claude Code).
+`http` POSTs the same JSON to `--url`.
+
+Configuration, from the environment or a `.env` file in the working directory:
+
+| Variable | Meaning |
+|---|---|
+| `ANTHROPIC_API_KEY` | for `--backend claude-api` |
+| `PYUNTO_EMAIL`, `PYUNTO_PASSWORD` | run as a registered account instead of an anonymous one |
+| `PYUNTO_AGENT_NAME` | display name of the anonymous account (default `Claude`) |
+| `PYUNTO_AGENT_DIR` | where the device id, identity key and space keys live (default `~/.pyunto-agent`) |
+| `PYUNTO_BACKEND`, `PYUNTO_COMMAND`, `PYUNTO_BACKEND_URL`, `PYUNTO_MODEL` | defaults for `--backend`, `--command`, `--url`, `--model` |
+| `PYUNTO_PERSONA` | default for `--persona` |
+| `PYUNTO_HISTORY` | `serve` only: entries of context (default 8) |
+| `PYUNTO_AGENT_LISTEN`, `PYUNTO_AGENT_SECRET` | `serve` only |
+| `PYUNTO_BASE_URL` | API server (default `https://api.pyunto.com`) |
+
+Changes in each version are in [Releases](https://github.com/utagoeinc/pyunto-agent/releases).
+
 ## Notes
 
 * Diary text is sent to the backend you choose. With `claude-api` that is Anthropic's API; say so
   to the people in the diary.
 * Rate limit: 60 replies per hour by default (`Bridge(max_replies_per_hour=…)`).
-* Spaces created before August 2026 still expose a legacy raw key; newer ones require the
-  wrapped key, which is why step 3 above matters.
-* Tests: `.venv/bin/pytest` (includes the sealed-box fixture from `E2EE_IMPLEMENTATION.md`).
+* The agent can read a diary only after a member has shared the space key with it, which the
+  app does when a member opens the space. If `whoami` shows `key=no`, open the space in the app.
+* How the encryption works, including test vectors: <https://pyunto.com/encryption.html>.
+* Tests: `pip install -e '.[dev]'` then `pytest` (includes the sealed-box test vector).
 
 ## Licence
 

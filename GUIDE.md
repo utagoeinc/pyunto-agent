@@ -63,20 +63,16 @@ python3 --version
 
 If it prints `3.11` or higher, you are fine. If not, install it from <https://www.python.org/downloads/>.
 
-Move to wherever you want pyunto-agent to live and fetch it (unzip the archive or use git clone, depending on how it was supplied).
+Make a folder for it, create a virtual environment there, and install from PyPI.
 
 ```bash
-cd ~
-git clone https://github.com/pyunto/pyunto-agent
-cd pyunto-agent
-```
-
-Create a virtual environment and install into it.
-
-```bash
+mkdir -p ~/pyunto-agent && cd ~/pyunto-agent
 python3 -m venv .venv
-.venv/bin/pip install -e .
+.venv/bin/pip install 'pyunto-agent[qr]'
 ```
+
+(A plain `pip install` outside a virtual environment fails on Homebrew's Python with
+`externally-managed-environment`. The virtual environment avoids that.)
 
 Check that it works. The first time you run it, a dedicated agent account of your own (display name Claude) is created automatically.
 
