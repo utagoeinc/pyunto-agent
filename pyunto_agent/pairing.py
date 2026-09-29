@@ -204,9 +204,8 @@ def save_qr(text: str, path: str | Path) -> Path:
     format follows the extension.
 
     Two formats. SVG needs nothing beyond `qrcode` and scales to any size, so it is the right
-    choice for print. PNG needs Pillow, which this package does not require -- if it is
-    missing, that is said plainly rather than raised as an ImportError about a module the
-    reader never mentioned. Anything else is refused: `qrcode` writes PNG bytes regardless of
+    choice for print. PNG uses Pillow when it is installed and pure-Python pypng otherwise.
+    Anything else is refused: `qrcode` writes PNG bytes regardless of
     the extension, so a `.jpg` would be a PNG under the wrong name.
     """
     import qrcode
@@ -233,12 +232,11 @@ def save_qr(text: str, path: str | Path) -> Path:
 
     try:
         import PIL  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError(
-            "PNG needs Pillow, which pyunto-agent does not install.\n"
-            "    pip install pillow\n"
-            f"Or write an SVG instead, which needs nothing extra: "
-            f"--image {path.with_suffix('.svg')}"
-        ) from e
-    qr.make_image().save(str(path))
+
+        qr.make_image().save(str(path))
+    except ImportError:
+        # Without Pillow, pypng (pure Python, a dependency of this package) writes the PNG.
+        from qrcode.image.pure import PyPNGImage
+
+        qr.make_image(image_factory=PyPNGImage).save(str(path))
     return path

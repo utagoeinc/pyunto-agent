@@ -1,0 +1,58 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.pyunto/diary",
+  "title": "Pyunto Diary",
+  "description": "Read, search and write your encrypted Pyunto diary from Claude. Decrypts only on your own machine.",
+  "websiteUrl": "https://pyunto.com",
+  "repository": {
+    "url": "https://github.com/utagoeinc/pyunto-agent",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://pyunto.com/icon-256.png",
+      "mimeType": "image/png",
+      "sizes": ["256x256"]
+    }
+  ],
+  "version": "0.3.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "pyunto-agent",
+      "version": "0.3.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "PYUNTO_AGENT_NAME",
+          "description": "Display name of this assistant's own Pyunto account, shown to the people in the diary",
+          "default": "Claude"
+        },
+        {
+          "name": "PYUNTO_EMAIL",
+          "description": "Optional: sign in as a registered Pyunto account instead of creating the assistant's own"
+        },
+        {
+          "name": "PYUNTO_PASSWORD",
+          "description": "Password for PYUNTO_EMAIL",
+          "isSecret": true
+        },
+        {
+          "name": "PYUNTO_AGENT_DIR",
+          "description": "Where the account's identity key, space keys and decrypted attachments are kept",
+          "default": "~/.pyunto-agent"
+        }
+      ]
+    }
+  ]
+}

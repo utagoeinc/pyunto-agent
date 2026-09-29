@@ -30,18 +30,11 @@ def test_svg_needs_nothing_beyond_qrcode(tmp_path):
     assert "<svg" in text and "path" in text
 
 
-def test_png_says_what_is_missing_rather_than_raising_importerror(tmp_path):
-    """Pillow is not a dependency. If it is absent, say so in terms the reader can act on."""
-    pytest.importorskip("qrcode")
-    try:
-        import PIL  # noqa: F401
-    except ImportError:
-        with pytest.raises(RuntimeError) as e:
-            save_qr(payload(), tmp_path / "trainer.png")
-        assert "pillow" in str(e.value).lower()
-        assert ".svg" in str(e.value), "offer the format that works"
-    else:
-        assert save_qr(payload(), tmp_path / "trainer.png").is_file()
+def test_png_is_written_with_or_without_pillow(tmp_path):
+    """Pillow is not a dependency; pypng (pure Python, a dependency) writes the PNG without it.
+    An MCP client started from the registry installs no extras, and its `pair` tool needs one."""
+    out = save_qr(payload(), tmp_path / "pair.png")
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_the_image_carries_the_same_payload_as_the_terminal(tmp_path):

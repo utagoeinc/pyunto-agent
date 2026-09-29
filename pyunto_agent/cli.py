@@ -269,8 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         if qr:
             print(qr)
         else:
-            print("(install the 'qr' extra to draw this as a scannable QR code:")
-            print("     pip install 'pyunto-agent[qr]')")
+            print("(could not draw the QR code; reinstall pyunto-agent, which includes qrcode:")
+            print("     pip install -U pyunto-agent)")
             print()
             print(text)
         print()

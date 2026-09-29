@@ -29,6 +29,29 @@ log = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "2025-06-18"
 
+#: Sent in the initialize response. Clients show it to the model as guidance for this server.
+INSTRUCTIONS = """\
+This server reads and writes a Pyunto diary: a private, end-to-end encrypted diary app for one
+person, two people or a group. Entries are decrypted on this computer, never by Pyunto.
+
+- If list_spaces is empty, the account is not in any diary yet: call `pair`, show the person the
+  QR code, and ask them to scan it in the Pyunto app and choose a diary. Then they should open
+  that diary in the app once, which hands this account the key.
+- Start with list_spaces, then list_threads and read_thread.
+- Entries with a photo, video or document show an `attachment`; call read_attachment to see it.
+- Before writing, call list_members: everyone in the space reads what you post.
+- Write only when the person asks you to. A diary is theirs; do not post on your own initiative.
+"""
+
+
+def _version() -> str:
+    try:
+        from importlib.metadata import version  # noqa: PLC0415
+
+        return version("pyunto-agent")
+    except Exception:  # noqa: BLE001
+        return "0"
+
 TOOLS: list[dict[str, Any]] = [
     {
         "name": "whoami",
@@ -179,6 +202,32 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "pair",
+        "description": "Show a QR code that lets a person add this account to one of their "
+        "Pyunto diaries. They scan it in the Pyunto app, choose a diary and approve. Use this "
+        "when list_spaces is empty. Returns the QR as an image, as a PNG file path, and as text.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"operator": {"type": "string", "description":
+                "Who runs this assistant, shown to the person before they approve "
+                "(e.g. their own name)."}},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "read_attachment",
+        "description": "Open the photo, video or document on a diary entry (read_thread shows "
+        "which entries have one). Photos come back as images, videos as a few frames, "
+        "documents as their text. The file is decrypted on this computer.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"space_id": {"type": "string"}, "thread_id": {"type": "string"},
+                           "message_id": {"type": "string"}},
+            "required": ["space_id", "thread_id", "message_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "join_space",
         "description": "Join a diary space from an invite link (pyunto://invite/…, https://…/invite/…) "
         "or a short invite code the human generated in the Pyunto app.",
@@ -208,6 +257,23 @@ def _timestamp_of(message) -> float | None:  # noqa: ANN001
         return datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).timestamp()
     except Exception:  # noqa: BLE001
         return None
+
+
+class Content:
+    """A tool result made of MCP content blocks (text and images) rather than one JSON text."""
+
+    def __init__(self, blocks: list[dict]):
+        self.blocks = blocks
+
+
+def _image(path) -> dict:  # noqa: ANN001
+    import base64  # noqa: PLC0415
+
+    from .media import sniff_image  # noqa: PLC0415
+
+    data = path.read_bytes()
+    mime = (sniff_image(data[:16]) or ("image/jpeg", ""))[0]
+    return {"type": "image", "data": base64.b64encode(data).decode("ascii"), "mimeType": mime}
 
 
 class MCPServer:
@@ -245,7 +311,8 @@ class MCPServer:
             self._send({"jsonrpc": "2.0", "id": rid, "result": {
                 "protocolVersion": params.get("protocolVersion") or PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "pyunto-agent", "version": "0.1.0"},
+                "serverInfo": {"name": "pyunto-agent", "title": "Pyunto Diary", "version": _version()},
+                "instructions": INSTRUCTIONS,
             }})
         elif method == "notifications/initialized":
             return
@@ -258,8 +325,12 @@ class MCPServer:
             args = params.get("arguments") or {}
             try:
                 payload = self._call(name, args)
-                text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, indent=2)
-                self._send({"jsonrpc": "2.0", "id": rid, "result": {"content": [{"type": "text", "text": text}]}})
+                if isinstance(payload, Content):
+                    content = payload.blocks
+                else:
+                    text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, indent=2)
+                    content = [{"type": "text", "text": text}]
+                self._send({"jsonrpc": "2.0", "id": rid, "result": {"content": content}})
             except Exception as e:  # noqa: BLE001
                 log.exception("tool %s failed", name)
                 self._send({"jsonrpc": "2.0", "id": rid, "result": {
@@ -268,6 +339,54 @@ class MCPServer:
             self._send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"unknown method {method}"}})
 
     # -- tools ----------------------------------------------------------------------
+
+    def _pair(self, operator: str) -> Content:
+        from .pairing import encode_payload, pairing_payload, render_qr, save_qr  # noqa: PLC0415
+
+        text = encode_payload(pairing_payload(
+            user_id=self.client.uuid, display_name=self.client.display_name,
+            public_key=self.identity_public_key, operator=operator, runtime="self_hosted"))
+        blocks: list[dict] = []
+        png = self.client.attachment_dir.parent / "pairing-qr.png"
+        try:
+            png.parent.mkdir(parents=True, exist_ok=True)
+            save_qr(text, png)
+            blocks.append(_image(png))
+            where = f"The QR code is also saved at {png} ."
+        except Exception:  # noqa: BLE001 - Pillow or qrcode missing: text QR still works
+            where = "(Install `pyunto-agent[qr]` and Pillow for a PNG of the code.)"
+        ascii_qr = render_qr(text) or ""
+        blocks.append({"type": "text", "text": (
+            f"Ask the person to scan this QR code in the Pyunto app, choose a diary and approve. "
+            f"The app shows that {self.client.display_name} is asking and who runs it. {where}\n"
+            "Afterwards they should open that diary in the app once, so this account receives "
+            "the key; then list_spaces will show it.\n\n"
+            + (f"```\n{ascii_qr}\n```" if ascii_qr else f"Pairing payload: {text}"))})
+        return Content(blocks)
+
+    def _read_attachment(self, space_id: str, thread_id: str, message_id: str) -> Content:
+        from .media import document_text, video_frames  # noqa: PLC0415
+
+        msg = next((m for m in self.client.get_messages(thread_id, space_id)
+                    if m.uuid == message_id), None)
+        if msg is None or msg.attachment is None:
+            raise ValueError("that entry has no photo, video or document")
+        att = msg.attachment
+        path = self.client.download_attachment(att)
+        if att.kind == "image":
+            return Content([_image(path), {"type": "text", "text": f"Photo saved at {path}"}])
+        if att.kind == "video":
+            frames = video_frames(path)
+            if not frames:
+                return Content([{"type": "text", "text":
+                                 f"A video, saved at {path}. Install ffmpeg to see frames."}])
+            return Content([{"type": "text", "text": f"{len(frames)} frames from the video at {path}:"},
+                            *[_image(f) for f in frames]])
+        body = document_text(path, att.mime)
+        if body is None:
+            body = ("(This format cannot be read here; install `pyunto-agent[docs]` for Word, "
+                    "Excel, PowerPoint and PDF text.)")
+        return Content([{"type": "text", "text": f"Document {att.name!r}, saved at {path}:\n\n{body}"}])
 
     def _call(self, name: str, a: dict) -> Any:
         if name == "whoami":
@@ -314,11 +433,18 @@ class MCPServer:
                     "from": m.sender_name,
                     "from_user_id": m.sender_uuid,
                     "mine": m.sender_uuid.lower() == self.client.uuid,
-                    "text": marker_preview(m.text) or m.text,
+                    "text": marker_preview(m.text) or m.text or (
+                        f"({m.attachment.label})" if m.attachment else ""),
+                    **({"attachment": {"kind": m.attachment.kind,
+                                       "open_with": "read_attachment"}} if m.attachment else {}),
                     "created_at": (m.raw or {}).get("created_at"),
                 }
                 for m in msgs
             ]
+        if name == "pair":
+            return self._pair(a.get("operator") or "")
+        if name == "read_attachment":
+            return self._read_attachment(a["space_id"], a["thread_id"], a["message_id"])
         if name == "wait_for_message":
             self._ensure_listener()
             deadline = time.time() + max(1, min(int(a.get("timeout_seconds") or 120), 600))

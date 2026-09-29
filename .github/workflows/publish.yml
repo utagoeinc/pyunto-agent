@@ -43,3 +43,33 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # The official MCP Registry entry (com.pyunto/diary) follows every PyPI release.
+  # Ownership of the pyunto.com namespace is proven with the Ed25519 key whose public half is
+  # at https://pyunto.com/.well-known/mcp-registry-auth; the private half is this secret.
+  # The registry checks the `mcp-name: com.pyunto/diary` line in the package README on PyPI,
+  # so this waits until the new version is visible there.
+  mcp-registry:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version from the release tag
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          jq --arg v "$V" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
+          echo "V=$V" >> "$GITHUB_ENV"
+      - name: Wait for PyPI
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf "https://pypi.org/pypi/pyunto-agent/$V/json" >/dev/null && exit 0
+            sleep 10
+          done
+          echo "pyunto-agent $V did not appear on PyPI"; exit 1
+      - name: Publish to the MCP Registry
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          curl -sL https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz | tar xz mcp-publisher
+          ./mcp-publisher login http --domain pyunto.com --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+          ./mcp-publisher publish

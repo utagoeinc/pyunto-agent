@@ -1,5 +1,7 @@
 # pyunto-agent
 
+<!-- mcp-name: com.pyunto/diary -->
+
 Make an external agent the partner of a Pyunto exchange diary. The agent is an ordinary member:
 its own Pyunto account, its own X25519 identity key, invited with the normal invite link. The
 server is unchanged and never sees plaintext; decryption happens in this process.
@@ -121,12 +123,11 @@ ask it to.
  └────────────────────────┘
 ```
 
-**How you invite it:** pair it the same way, but with `--no-run` — this one should not sit
-there answering — then register it with your MCP client once:
+**How you invite it:** add the server to your MCP client (below), then ask Claude to pair:
+the `pair` tool shows a QR code to scan in the Pyunto app. No terminal step is needed.
 
 ```bash
-pyunto-agent pair --no-run      # scan the QR code, then it exits
-claude mcp add pyunto -- "$(pwd)/.venv/bin/pyunto-agent" mcp
+claude mcp add pyunto-diary -- uvx pyunto-agent mcp
 ```
 
 **What it is for:** using your diary as memory. Searching months of entries, summarising a
@@ -353,17 +354,51 @@ and its stdout is used as the reply (`{"result": …}`, `{"reply": …}`, or pla
 
 ## MCP: Pyunto as tools for Claude
 
+Listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as
+**`com.pyunto/diary`** (Pyunto Diary). It runs with [`uv`](https://docs.astral.sh/uv/); nothing
+else needs installing.
+
+**Claude Code**
+
 ```bash
-claude mcp add pyunto -- "$(pwd)/.venv/bin/pyunto-agent" mcp
+claude mcp add pyunto-diary -- uvx pyunto-agent mcp
 ```
 
-Run that from the clone, or substitute the absolute path to the `pyunto-agent` executable —
-Claude Code launches it without a shell, so a bare `pyunto-agent` only works if it is on the
-PATH of the process that starts Claude Code.
+**Claude Desktop** (`claude_desktop_config.json`) and **Cursor** (`~/.cursor/mcp.json`)
 
-Tools: `whoami`, `list_spaces`, `list_members`, `list_threads`, `read_thread`,
-`wait_for_message`, `post_entry`, `react`, `post_sticker`, `post_list_item`,
-`quick_list_stats`, `join_space`. A minimal autonomous loop in Claude Code:
+```json
+{
+  "mcpServers": {
+    "pyunto-diary": { "command": "uvx", "args": ["pyunto-agent", "mcp"] }
+  }
+}
+```
+
+**VS Code** (`.vscode/mcp.json`)
+
+```json
+{
+  "servers": {
+    "pyunto-diary": { "type": "stdio", "command": "uvx", "args": ["pyunto-agent", "mcp"] }
+  }
+}
+```
+
+Then say *"pair with my Pyunto diary"*. Claude calls `pair` and shows a QR code; scan it in the
+app, choose a diary, approve, and open that diary in the app once so the key is shared.
+
+| Tool | What it does |
+|---|---|
+| `pair` | QR code that lets a person add this account to one of their diaries |
+| `whoami`, `list_spaces`, `list_members` | the account, its diaries, and who is in each (and who runs any agent) |
+| `list_threads`, `read_thread` | entries, decrypted on this machine |
+| `read_attachment` | a photo (as an image), a video (as frames) or a document (as text) |
+| `wait_for_message` | block until someone writes |
+| `post_entry`, `react`, `post_sticker`, `post_list_item` | write into the diary |
+| `quick_list_stats` | how often each quick-list item was logged over a period |
+| `join_space` | join from an invite link or code made in the app |
+
+A minimal autonomous loop in Claude Code:
 
 ```
 > Use wait_for_message, then reply with post_entry in the same thread. Repeat.

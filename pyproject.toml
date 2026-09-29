@@ -1,6 +1,6 @@
 [project]
 name = "pyunto-agent"
-version = "0.2.0"
+version = "0.3.0"
 description = "Make an external agent (Claude, Claude Code, any CLI/HTTP agent) the partner of a Pyunto exchange diary"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -27,13 +27,17 @@ dependencies = [
     "python-socketio[client]>=5.16",
     "cryptography>=42.0",
     "python-dotenv>=1.0",
+    # Pairing is how every agent gets into a diary, including one started by an MCP client
+    # from the registry (`uvx pyunto-agent mcp`), which installs no extras. So the QR code is
+    # part of the base install: qrcode and pypng are small and pure Python.
+    "qrcode>=7.4",
+    "pypng>=0.20220715",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-# Terminal QR for agent-initiated pairing. Optional: a headless agent in CI never shows one,
-# and a hard requirement would make every install pay for a path most runs do not take.
-qr = ["qrcode>=7.4"]
+# Kept so `pip install pyunto-agent[qr]` from older instructions still works; QR is now built in.
+qr = []
 # Reading attached documents for models that cannot open them directly: Word, Excel,
 # PowerPoint and PDF text, and Pillow to convert HEIC / oversized photos. Plain text, images,
 # PDFs sent to the Claude API, and anything Claude Code opens itself need none of these.
