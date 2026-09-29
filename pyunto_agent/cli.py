@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import shutil
 import sys
 import uuid
 from pathlib import Path
@@ -73,9 +74,36 @@ def _connect() -> tuple[PyuntoClient, WrappedSpaceKeyProvider, IdentityStore]:
     return client, keys, identity
 
 
-def _answer_entries(args, client) -> int:  # noqa: ANN001
+def _backend_or_explain(args):  # noqa: ANN001
+    """Build the reply backend, or say plainly what is missing and return None.
+
+    Checked before anything else happens. `pair` used to build it only after the scan, so the
+    first thing a new user saw after a successful pairing was a traceback about
+    ANTHROPIC_API_KEY -- and the agent was already in their diary, silent.
+    """
+    try:
+        return make_backend(args.backend, command=args.command, url=args.url, model=args.model)
+    except ValueError as e:
+        print(f"\nCannot answer entries yet: {e}.\n")
+        if args.backend == "claude-api":
+            print("Choose where replies come from:")
+            print("  - the Claude API:   export ANTHROPIC_API_KEY=sk-ant-...   then run this again")
+            if shutil.which("claude"):
+                print("  - Claude Code, which is installed here (no API key needed):")
+                print(f"      pyunto-agent {args.cmd} --backend command --command 'claude -p --output-format json'")
+            else:
+                print("  - Claude Code:      --backend command --command 'claude -p --output-format json'")
+            print("  - your own service: --backend http --url https://...")
+            if args.cmd == "pair":
+                print("  - or pair now and start answering later:  pyunto-agent pair --no-run")
+        return None
+
+
+def _answer_entries(args, client, backend=None) -> int:  # noqa: ANN001
     """Listen, and reply to diary entries. Shared by `run` and by `pair` once it is paired."""
-    backend = make_backend(args.backend, command=args.command, url=args.url, model=args.model)
+    backend = backend or _backend_or_explain(args)
+    if backend is None:
+        return 2
     bridge = Bridge(
         client, backend, _persona(args.persona),
         space_ids=set(args.space) if args.space else None,
@@ -194,6 +222,12 @@ def main(argv: list[str] | None = None) -> int:
         return _answer_entries(args, client)
 
     if args.cmd == "pair":
+        # Decide how replies are made before the QR code is shown, not after the scan.
+        backend = None
+        if not args.no_run and not args.image:
+            backend = _backend_or_explain(args)
+            if backend is None:
+                return 2
         from .pairing import (
             encode_payload,
             pairing_payload,
@@ -259,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"paired — joined a space. Answering entries now.\n")
         args.space = [space_id]
-        return _answer_entries(args, client)
+        return _answer_entries(args, client, backend)
 
     if args.cmd == "mcp":
         from .mcp_server import MCPServer
