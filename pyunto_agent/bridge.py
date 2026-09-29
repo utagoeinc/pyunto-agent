@@ -81,6 +81,39 @@ class Bridge:
             if isinstance(users, list) and users:
                 self._space_member_counts[sid] = len(users)
 
+    def describe_spaces(self) -> list[str]:
+        """One line per space this agent answers in: its name, whether it can read it yet,
+        and whether it answers everything or only when addressed.
+
+        Printed at start-up. Without it, `listening on 2 chat space(s)` was the only thing
+        on screen, and the person running the agent had no way to tell which diaries it
+        had been let into.
+        """
+        lines = []
+        for sid, name in sorted(self._space_names.items(), key=lambda kv: kv[1].lower()):
+            if self.space_ids and sid not in self.space_ids:
+                continue
+            members = self._member_count(sid)
+            mode = "answers every entry" if members <= 2 else "answers only when mentioned"
+            keys = getattr(self.client, "keys", None)
+            try:
+                readable = keys is None or keys.get_key(sid) is not None
+            except Exception:  # noqa: BLE001 - no key yet, not a member, network
+                readable = False
+            state = "" if readable else "  (cannot read it yet: open this space in the Pyunto app once)"
+            lines.append(f"  {name}  [{members} members, {mode}]  {sid[:8]}{state}")
+        return lines
+
+    def announce_spaces(self) -> None:
+        lines = self.describe_spaces()
+        if not lines:
+            print("\nNot in any diary yet. Run `pyunto-agent pair` and scan the QR code in the app.\n", flush=True)
+            return
+        print(f"\nAnswering in {len(lines)} diar{'y' if len(lines) == 1 else 'ies'}:", flush=True)
+        for line in lines:
+            print(line, flush=True)
+        print(flush=True)
+
     def _member_count(self, chat_space_id: str) -> int:
         """How many members this space has, **counting the agent itself**.
 
@@ -227,6 +260,7 @@ class Bridge:
 
     def run(self) -> None:
         self.refresh_spaces()
+        self.announce_spaces()
         self._listener = self._start_listener()
         log.info("bridge online as %s (backend=%s, dry_run=%s)", self.client.uuid, self.backend.name, self.dry_run)
         try:
@@ -258,6 +292,7 @@ class Bridge:
             old.join(timeout=3.0)
         self._listener = self._start_listener()
         log.info("listener reconnected (%d spaces)", len(self._space_names))
+        self.announce_spaces()
 
     def stop(self) -> None:
         self._stop.set()
